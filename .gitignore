@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local AI/agent caches or state (ignore if these exist in your workflow)
+.copilot/
+.agent/
+*.agent
+*.agent.json
+
+# Editor / OS
+.vscode/
+.idea/
+*.log
