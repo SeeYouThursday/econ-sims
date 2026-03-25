@@ -24,13 +24,11 @@ export interface EconomicData {
   q: number;
   inf: number;
   unp: number;
+  rate: number; // Restored the rate to the history type
 }
 
 // --- HELPER COMPONENTS ---
 
-/**
- * Floating labels that ride the end of the line
- */
 const CustomizedLabel = (props: any) => {
   const { x, y, color, text, index, lastIndex } = props;
   if (index !== lastIndex) return null;
@@ -60,9 +58,6 @@ const CustomizedLabel = (props: any) => {
   );
 };
 
-/**
- * Smaller stat boxes for the top of the control column
- */
 const CompactStat = ({ title, val, color, icon }: any) => (
   <div
     className={`${color} p-4 rounded-2xl text-white shadow-md flex flex-col items-center justify-center`}
@@ -79,21 +74,20 @@ const CompactStat = ({ title, val, color, icon }: any) => (
 // --- MAIN GAME COMPONENT ---
 
 export default function FedGame() {
-  // Game State
   const [quarter, setQuarter] = useState(1);
   const [inflation, setInflation] = useState(2.0);
   const [unemployment, setUnemployment] = useState(5.0);
-  const [interestRate, setInterestRate] = useState(6.0);
+  const [interestRate, setInterestRate] = useState(4.0);
+
+  // History now correctly tracks the rate for every quarter
   const [history, setHistory] = useState<EconomicData[]>([
-    { q: 1, inf: 2.0, unp: 5.0 },
+    { q: 1, inf: 2.0, unp: 5.0, rate: 4.0 },
   ]);
 
-  // UI State
   const [news, setNews] = useState('Welcome, Chair. Stabilize the economy.');
   const [showHints, setShowHints] = useState(true);
   const [gameOver, setGameOver] = useState(false);
 
-  // Economic Engine News Events
   const newsEvents = [
     {
       m: '⛽ Energy costs are soaring! Shipping is expensive.',
@@ -134,7 +128,6 @@ export default function FedGame() {
       setNews('The economy remains steady this quarter.');
     }
 
-    // Economics Math
     const nextInf = Math.max(
       0.2,
       inflation + -0.18 * rateGap + eInf + (Math.random() * 0.2 - 0.1),
@@ -148,14 +141,18 @@ export default function FedGame() {
     setInflation(nextInf);
     setUnemployment(nextUnp);
     setQuarter(nextQ);
-    setHistory([...history, { q: nextQ, inf: nextInf, unp: nextUnp }]);
+
+    // Pushing the interestRate into history here
+    setHistory([
+      ...history,
+      { q: nextQ, inf: nextInf, unp: nextUnp, rate: interestRate },
+    ]);
 
     if (nextQ >= 16) setGameOver(true);
   };
 
   return (
     <div className="h-[90vh] max-h-[780px] max-w-5xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border flex flex-col p-6 overflow-hidden select-none relative">
-      {/* Game Over Report Card Overlay */}
       {gameOver && (
         <ReportCard
           history={history}
@@ -163,23 +160,20 @@ export default function FedGame() {
         />
       )}
 
-      {/* Header Bar */}
       <div className="flex justify-between items-center mb-6 px-2 border-b pb-4">
-        <div>
-          <h1 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-            🏛️ FED CHAIR ACADEMY
-          </h1>
-        </div>
+        <h1 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+          🏛️ FED CHAIR ACADEMY
+        </h1>
         <div className="flex items-center gap-3 bg-slate-100 px-4 py-1.5 rounded-full border border-slate-200">
           <Calendar size={14} className="text-slate-500" />
-          <span className="font-black text-slate-700 text-sm">
-            YEAR {Math.ceil(quarter / 4)} OF 4
+          <span className="font-black text-slate-700 text-sm uppercase tracking-tighter">
+            Year {Math.ceil(quarter / 4)} of 4
           </span>
         </div>
       </div>
 
       <div className="flex-1 grid grid-cols-12 gap-6 overflow-hidden">
-        {/* CHART AREA (Left 60%) */}
+        {/* CHART AREA */}
         <div className="col-span-7 bg-slate-50 rounded-[2rem] p-5 border border-slate-100 flex flex-col shadow-inner">
           <div className="flex justify-between items-center mb-4 px-2">
             <div className="flex gap-4">
@@ -210,8 +204,6 @@ export default function FedGame() {
                   axisLine={false}
                   tickLine={false}
                 />
-
-                {/* Visual Targets */}
                 <ReferenceLine
                   y={2}
                   stroke="#ef4444"
@@ -240,7 +232,6 @@ export default function FedGame() {
                     />
                   }
                 />
-
                 <Line
                   type="monotone"
                   dataKey="unp"
@@ -261,9 +252,8 @@ export default function FedGame() {
           </div>
         </div>
 
-        {/* CONTROLS AREA (Right 40%) */}
+        {/* CONTROLS AREA */}
         <div className="col-span-5 flex flex-col gap-4">
-          {/* Top Stat Row */}
           <div className="grid grid-cols-2 gap-4">
             <CompactStat
               title="INFLATION"
@@ -279,21 +269,18 @@ export default function FedGame() {
             />
           </div>
 
-          {/* Main Control Panel */}
           <div className="flex-1 bg-slate-900 rounded-[2rem] p-6 text-white flex flex-col justify-between shadow-2xl">
-            {/* News/Briefing */}
             <div className="text-center bg-slate-800/50 p-3 rounded-2xl border border-slate-700">
               <p className="text-blue-400 font-black text-[9px] tracking-[0.2em] uppercase mb-1">
                 Briefing
               </p>
               <p className="text-sm font-medium italic opacity-90 leading-tight">
-                "{news}"
+                &quot;{news}&quot;
               </p>
             </div>
 
-            {/* Interest Rate Slider */}
             <div className="space-y-4">
-              <div className="flex justify-between items-end">
+              <div className="flex justify-between items-end px-1">
                 <span className="text-slate-500 font-black text-[10px] tracking-widest uppercase">
                   Interest Rate
                 </span>
@@ -308,14 +295,13 @@ export default function FedGame() {
                 step="0.25"
                 value={interestRate}
                 onChange={(e) => setInterestRate(parseFloat(e.target.value))}
-                className="w-full h-3 bg-slate-700 rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
+                className="w-full h-3 bg-slate-700 rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
               />
             </div>
 
-            {/* Action Button */}
             <button
               onClick={advanceQuarter}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl text-xl transition-all active:scale-[0.96] shadow-lg flex items-center justify-center gap-2 group"
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl text-xl transition-all active:scale-[0.96] flex items-center justify-center gap-2 group shadow-lg"
             >
               NEXT QUARTER{' '}
               <ArrowRight
@@ -324,7 +310,6 @@ export default function FedGame() {
               />
             </button>
 
-            {/* Hint System */}
             <div className="border-t border-slate-800 pt-4 flex flex-col items-center">
               <button
                 onClick={() => setShowHints(!showHints)}
@@ -336,10 +321,9 @@ export default function FedGame() {
                 />{' '}
                 Advisor Advice
               </button>
-
               {showHints && (
-                <div className="mt-3 bg-slate-800/80 p-3 rounded-xl border border-slate-700 animate-in fade-in slide-in-from-top-1">
-                  <p className="text-[11px] text-blue-200 text-center font-bold leading-snug">
+                <div className="mt-3 bg-slate-800/80 p-3 rounded-xl border border-slate-700 animate-in fade-in slide-in-from-top-1 text-center">
+                  <p className="text-[11px] text-blue-200 font-bold leading-snug">
                     {getAdvice()}
                   </p>
                 </div>
