@@ -1,68 +1,48 @@
 <!--
-This file is generated to help AI coding agents (Copilot / automated contributors)
-quickly understand and act within this repository. It is deliberately concise
-and focused on discoverable facts and immediate next steps for an empty/new repo.
+This file is generated to help AI coding agents contribute to the SeeYouThursday/econ-sims repository.
+It describes the current project shape and the best way to make small, safe changes.
 -->
 
 # Copilot instructions for this repository
 
 Repository snapshot
 
-- The repository is currently empty: there are no source files, manifests, or
-  documentation at the root (no `README.md`, `package.json`, `pyproject.toml`,
-  etc.). Because there is no implementation to read, these instructions focus
-  on safe, discoverable first actions and the conventions to follow when
-  adding initial scaffolding.
+- This is a Next.js 16 app using React 19, TypeScript, Tailwind CSS, and Recharts.
+- The application code lives in `app/` and `components/`; shared types are in `types/`.
+- There is one API route under `app/api/stock/route.ts` and a stock simulator UI in `components/StockGame.tsx`.
+- Use the existing `package.json` scripts: `dev`, `build`, `start`, and `lint`.
 
 What an AI agent should do first
 
-- Re-scan the repo root for common manifests: `package.json`, `pyproject.toml`,
-  `requirements.txt`, `setup.py`, `Cargo.toml`, `Makefile`. If any appear, stop
-  and re-run analysis against those files.
-- If still empty, create a minimal `README.md` describing the intended purpose
-  of the project (one-paragraph), and add a short TODO list in the repo root.
+- Read `package.json`, `tsconfig.json`, `next.config.ts`, `app/page.tsx`, and `components/StockGame.tsx`.
+- Prefer existing App Router conventions and avoid introducing legacy `pages/` patterns.
+- For UI changes, keep work inside `app/`, `components/`, and `public/`.
 
 Scaffolding recommendations (concrete, minimal)
 
-- Choose a language/runtime based on the user's preference; if unknown, create
-  a simple `README.md` and an empty `src/` directory. Prefer the following
-  minimal files as applicable:
-  - Node.js: `package.json` with `name` and `scripts` for `start` and `test`.
-  - Python: `pyproject.toml` or `requirements.txt` and `src/` package.
-- Commit incremental changes so humans can review — keep PRs small and focused.
+- If new features are requested, implement them in the existing Next.js app structure.
+- Do not add a new top-level framework or a full separate backend.
+- Add tests only if the user asks and if there is an existing test framework; this repo has no test setup currently.
 
 Development workflows (how to detect and run)
 
-- When manifests are present, use the native commands:
-  - Node: `npm install` / `npm test` / `npm run build` (look at `package.json`)
-  - Python: `python -m pip install -r requirements.txt` or `poetry install` if
-    `pyproject.toml` exists; run tests via `pytest` if present.
-- If no test framework is present, add a single, fast smoke test that verifies
-  the project imports/starts. Example locations: `tests/test_smoke.py` or
-  `test/index.test.js`.
+- Use `npm install`, `npm run dev`, `npm run build`, and `npm run lint`.
+- If changing TypeScript code, ensure `npm run build` succeeds.
+- If changing frontend behavior, verify the app compiles and follow existing styling conventions.
 
 Project conventions and merge guidance
 
-- Keep public code under `src/` and CLI/tools under `scripts/` or `bin/`.
-- Add a top-level `README.md` before adding significant code — it anchors the
-  project's intent and helps future agents decide architecture.
-- If `.github/copilot-instructions.md` already exists, merge by preserving any
-  specific examples and updating only the repo-state & next-step sections.
+- Keep React components typed, lean, and reusable.
+- Use `components/` for standalone UI pieces and `app/` for page routing.
+- Keep CSS changes in `app/globals.css` unless adding small component-level styles.
+- Avoid breaking changes that require broad refactors across unrelated components.
 
 Integration points & external dependencies
 
-- There are none discoverable in the current repository snapshot. When adding
-  integrations (APIs, databases, services), document them in `README.md` and
-  include small, runnable integration checks (e.g., a `scripts/check_db.py`)
-  that return non-zero on failure.
+- The repo currently has no external API credentials or database integrations.
+- If an integration is needed, document it clearly and use environment variables rather than hard-coded secrets.
 
 Safety notes for the agent
 
-- Do not create secrets in the repo. If credentials are required for testing,
-  create a sample `.env.example` and instruct humans to provide real secrets via
-  repository secrets or local environment variables.
-- Keep changes minimal and reviewable — prefer adding scaffolding and docs to
-  guessing large architectural choices.
-
-If anything here is unclear or you'd like a different starting scaffold (Node,
-Python, or Rust), tell me which language and I'll generate the minimal files.
+- Do not create secrets in the repository.
+- Keep modifications minimal, reviewable, and aligned to the existing Next.js app.
