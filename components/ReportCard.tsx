@@ -6,12 +6,7 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react';
-import { EconomicData, GradeResult } from '../types';
-
-interface ReportCardProps {
-  history: EconomicData[];
-  onRestart: () => void;
-}
+import { GradeResult, ReportCardProps } from '@/types';
 
 const ReportCard: React.FC<ReportCardProps> = ({ history, onRestart }) => {
   const avgInf =

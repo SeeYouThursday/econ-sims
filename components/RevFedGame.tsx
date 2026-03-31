@@ -18,20 +18,14 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import ReportCard from './ReportCard';
-
+import CompactStat from './CompactStat';
 // --- TYPES ---
-export interface EconomicData {
-  q: number;
-  inf: number;
-  unp: number;
-  rate: number; // Restored the rate to the history type
-}
+import { EconomicData, CustomizedLabelProps } from '@/types';
 
 // --- HELPER COMPONENTS ---
-
-const CustomizedLabel = (props: any) => {
+const CustomizedLabel = (props: CustomizedLabelProps) => {
   const { x, y, color, text, index, lastIndex } = props;
-  if (index !== lastIndex) return null;
+  if (index !== lastIndex || x === undefined || y === undefined) return null;
 
   return (
     <g>
@@ -57,19 +51,6 @@ const CustomizedLabel = (props: any) => {
     </g>
   );
 };
-
-const CompactStat = ({ title, val, color, icon }: any) => (
-  <div
-    className={`${color} p-4 rounded-2xl text-white shadow-md flex flex-col items-center justify-center`}
-  >
-    <p className="flex items-center gap-1 text-[9px] font-black opacity-80 mb-1 tracking-widest uppercase">
-      {icon} {title}
-    </p>
-    <p className="text-2xl font-black tabular-nums tracking-tighter">
-      {val.toFixed(1)}%
-    </p>
-  </div>
-);
 
 // --- MAIN GAME COMPONENT ---
 
@@ -152,7 +133,7 @@ export default function FedGame() {
   };
 
   return (
-    <div className="h-[90vh] max-h-[780px] max-w-5xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border flex flex-col p-6 overflow-hidden select-none relative">
+    <div className="h-[90vh] max-h-195 max-w-5xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border flex flex-col p-6 overflow-hidden select-none relative">
       {gameOver && (
         <ReportCard
           history={history}
@@ -174,7 +155,7 @@ export default function FedGame() {
 
       <div className="flex-1 grid grid-cols-12 gap-6 overflow-hidden">
         {/* CHART AREA */}
-        <div className="col-span-7 bg-slate-50 rounded-[2rem] p-5 border border-slate-100 flex flex-col shadow-inner">
+        <div className="col-span-7 bg-slate-50 rounded-4xl p-5 border border-slate-100 flex flex-col shadow-inner">
           <div className="flex justify-between items-center mb-4 px-2">
             <div className="flex gap-4">
               <span className="text-[10px] font-black text-red-500 flex items-center gap-1 uppercase tracking-widest">
@@ -269,7 +250,7 @@ export default function FedGame() {
             />
           </div>
 
-          <div className="flex-1 bg-slate-900 rounded-[2rem] p-6 text-white flex flex-col justify-between shadow-2xl">
+          <div className="flex-1 bg-slate-900 rounded-4xl p-6 text-white flex flex-col justify-between shadow-2xl">
             <div className="text-center bg-slate-800/50 p-3 rounded-2xl border border-slate-700">
               <p className="text-blue-400 font-black text-[9px] tracking-[0.2em] uppercase mb-1">
                 Briefing
@@ -289,6 +270,7 @@ export default function FedGame() {
                 </span>
               </div>
               <input
+                title="interest rate"
                 type="range"
                 min="0"
                 max="10"
