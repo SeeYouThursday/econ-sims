@@ -40,6 +40,14 @@ export interface StockInfo {
   description: string;
 }
 
+export interface FedStartResponse {
+  inflation: number;
+  unemployment: number;
+  interestRate: number;
+  source: string;
+  asOf: string;
+}
+
 // Future thought:
 export interface NewsEvent {
   m: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -19,6 +19,9 @@ import {
 } from 'lucide-react';
 import ReportCard from './ReportCard';
 import CompactStat from './CompactStat';
+import YearSummary from './YearSummary';
+import AdvisorPanel from './AdvisorPanel';
+import { fetchFedStartData } from '@/actions';
 // --- TYPES ---
 import { EconomicData, CustomizedLabelProps } from '@/types';
 
@@ -36,7 +39,7 @@ const CustomizedLabel = (props: CustomizedLabelProps) => {
         height={16}
         rx={4}
         fill="white"
-        fillOpacity={0.9}
+        fillOpacity={0}
       />
       <text
         x={x + 5}
@@ -65,6 +68,33 @@ export default function FedGame() {
     { q: 1, inf: 2.0, unp: 5.0, rate: 4.0 },
   ]);
 
+  useEffect(() => {
+    let active = true;
+
+    fetchFedStartData()
+      .then((start) => {
+        if (!active) return;
+        setInflation(start.inflation);
+        setUnemployment(start.unemployment);
+        setInterestRate(start.interestRate);
+        setHistory([
+          {
+            q: 1,
+            inf: start.inflation,
+            unp: start.unemployment,
+            rate: start.interestRate,
+          },
+        ]);
+      })
+      .catch((error) => {
+        console.warn('Fed start fetch failed:', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const [news, setNews] = useState('Welcome, Chair. Stabilize the economy.');
   const [showHints, setShowHints] = useState(true);
   const [gameOver, setGameOver] = useState(false);
@@ -91,6 +121,53 @@ export default function FedGame() {
       return '🧊 TOO COLD! Prices are flat. Lower rates to jumpstart spending.';
     return '✅ GOLDILOCKS ZONE! Everything is balanced. Stay the course!';
   };
+
+  const yearSummary = useMemo(() => {
+    const currentYear = Math.ceil(quarter / 4);
+    const startQuarter = (currentYear - 1) * 4 + 1;
+    const yearHistory = history.filter(
+      (item) => item.q >= startQuarter && item.q <= quarter,
+    );
+    const quarterCount = yearHistory.length;
+    const startEntry = yearHistory[0];
+    const currentEntry = yearHistory[yearHistory.length - 1];
+
+    if (!startEntry || !currentEntry) {
+      return {
+        currentYear,
+        quarterCount,
+        summary: 'No year data available yet.',
+      };
+    }
+
+    const inflationDelta = Number(
+      (currentEntry.inf - startEntry.inf).toFixed(2),
+    );
+    const unemploymentDelta = Number(
+      (currentEntry.unp - startEntry.unp).toFixed(2),
+    );
+    const inflationText =
+      inflationDelta === 0
+        ? 'unchanged'
+        : `${inflationDelta > 0 ? 'rose' : 'fell'} ${Math.abs(inflationDelta).toFixed(2)}pp`;
+    const unemploymentText =
+      unemploymentDelta === 0
+        ? 'unchanged'
+        : `${unemploymentDelta > 0 ? 'rose' : 'fell'} ${Math.abs(unemploymentDelta).toFixed(2)}pp`;
+
+    const summary =
+      quarterCount === 1
+        ? `Year ${currentYear} just began with inflation at ${startEntry.inf.toFixed(2)}% and unemployment at ${startEntry.unp.toFixed(2)}%.`
+        : `Year ${currentYear} has completed ${quarterCount} quarter${quarterCount > 1 ? 's' : ''}. Inflation ${inflationText}, unemployment ${unemploymentText}, and the Fed rate is currently ${currentEntry.rate.toFixed(2)}%.`;
+
+    return {
+      currentYear,
+      quarterCount,
+      summary,
+      startEntry,
+      currentEntry,
+    };
+  }, [history, quarter]);
 
   const advanceQuarter = () => {
     if (quarter >= 16) return;
@@ -133,7 +210,7 @@ export default function FedGame() {
   };
 
   return (
-    <div className="h-[90vh] max-h-195 max-w-5xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border flex flex-col p-6 overflow-hidden select-none relative">
+    <div className="lg:h-[90vh] max-w-5xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border flex flex-col p-6 overflow-visible select-none relative">
       {gameOver && (
         <ReportCard
           history={history}
@@ -153,9 +230,9 @@ export default function FedGame() {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-12 gap-6 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 gap-6 overflow-hidden lg:grid-cols-12">
         {/* CHART AREA */}
-        <div className="col-span-7 bg-slate-50 rounded-4xl p-5 border border-slate-100 flex flex-col shadow-inner">
+        <div className="lg:col-span-7 bg-slate-50 rounded-4xl p-5 border border-slate-100 flex flex-col shadow-inner">
           <div className="flex justify-between items-center mb-4 px-2">
             <div className="flex gap-4">
               <span className="text-[10px] font-black text-red-500 flex items-center gap-1 uppercase tracking-widest">
@@ -167,8 +244,22 @@ export default function FedGame() {
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 relative">
-            <ResponsiveContainer width="100%" height="100%">
+          <YearSummary
+            currentYear={yearSummary.currentYear}
+            quarterCount={yearSummary.quarterCount}
+            summary={yearSummary.summary}
+            startInflation={yearSummary.startEntry?.inf}
+            startUnemployment={yearSummary.startEntry?.unp}
+          />
+
+          <div className="flex-1 min-w-0 min-h-96 relative">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              minWidth={3}
+              minHeight={1}
+              aspect={1.7}
+            >
               <LineChart
                 data={history}
                 margin={{ top: 10, right: 60, left: -25, bottom: 0 }}
@@ -234,8 +325,8 @@ export default function FedGame() {
         </div>
 
         {/* CONTROLS AREA */}
-        <div className="col-span-5 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="lg:col-span-5 flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <CompactStat
               title="INFLATION"
               val={inflation}
@@ -292,25 +383,11 @@ export default function FedGame() {
               />
             </button>
 
-            <div className="border-t border-slate-800 pt-4 flex flex-col items-center">
-              <button
-                onClick={() => setShowHints(!showHints)}
-                className="text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-[0.15em] flex items-center gap-2 transition-colors"
-              >
-                <Lightbulb
-                  size={12}
-                  className={showHints ? 'text-yellow-400' : ''}
-                />{' '}
-                Advisor Advice
-              </button>
-              {showHints && (
-                <div className="mt-3 bg-slate-800/80 p-3 rounded-xl border border-slate-700 animate-in fade-in slide-in-from-top-1 text-center">
-                  <p className="text-[11px] text-blue-200 font-bold leading-snug">
-                    {getAdvice()}
-                  </p>
-                </div>
-              )}
-            </div>
+            <AdvisorPanel
+              showHints={showHints}
+              advice={getAdvice()}
+              onToggle={() => setShowHints(!showHints)}
+            />
           </div>
         </div>
       </div>

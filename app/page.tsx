@@ -45,17 +45,17 @@ const Page = () => {
               </p>
               <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
                 <Link
-                  href="/stock"
+                  href="/fed-simulator"
                   className="inline-flex items-center justify-center rounded-full bg-sky-400 px-6 py-3 text-sm font-black uppercase tracking-[0.2em] text-slate-950 transition hover:bg-sky-300"
                 >
-                  Try the stock market lesson
+                  Try the Fed simulator
                 </Link>
-                <a
-                  href="#why-teachers"
+                <Link
+                  href="/stock"
                   className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-black uppercase tracking-[0.2em] text-white transition hover:border-white hover:bg-white/15"
                 >
-                  Why it works
-                </a>
+                  Try the stock lesson
+                </Link>
               </div>
             </div>
 
@@ -178,17 +178,17 @@ const Page = () => {
               </p>
               <div className="mt-8 flex flex-col gap-4 sm:flex-row">
                 <Link
-                  href="/stock"
+                  href="/fed-simulator"
                   className="inline-flex items-center justify-center rounded-full bg-sky-400 px-6 py-3 text-sm font-black uppercase tracking-[0.2em] text-slate-950 transition hover:bg-sky-300"
                 >
-                  Launch the stock lesson
+                  Launch the Fed simulator
                 </Link>
-                <a
-                  href="#why-teachers"
+                <Link
+                  href="/stock"
                   className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-black uppercase tracking-[0.2em] text-white transition hover:border-white hover:bg-white/15"
                 >
-                  Explore teaching tools
-                </a>
+                  Try the stock lesson
+                </Link>
               </div>
             </div>
             <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-2xl">
