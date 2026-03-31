@@ -6,6 +6,7 @@ import { Menu, X } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Home' },
+  { href: '/fed-simulator', label: 'Fed Simulator' },
   { href: '/stock', label: 'Stock Market' },
 ];
 
@@ -36,10 +37,10 @@ export default function SiteHeader() {
 
         <div className="hidden items-center gap-3 md:flex">
           <Link
-            href="/stock"
+            href="/fed-simulator"
             className="rounded-full bg-slate-900 px-5 py-2 text-sm font-black uppercase tracking-[0.2em] text-white transition hover:bg-slate-800"
           >
-            Try stock POC
+            Try Fed Simulator
           </Link>
         </div>
 
@@ -69,11 +70,11 @@ export default function SiteHeader() {
               </Link>
             ))}
             <Link
-              href="/stock"
+              href="/fed-simulator"
               onClick={() => setMenuOpen(false)}
               className="block rounded-3xl bg-slate-900 px-4 py-3 text-sm font-black uppercase tracking-[0.2em] text-white transition hover:bg-slate-800"
             >
-              Try stock POC
+              Try Fed Simulator
             </Link>
           </div>
         </div>

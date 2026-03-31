@@ -288,8 +288,14 @@ export default function StockGame() {
       ) : null}
 
       <div className="rounded-4xl border border-slate-200 bg-slate-50 px-4 py-6 shadow-inner">
-        <div className="h-80 md:h-90 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="min-h-[20rem] w-full">
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+            minWidth={0}
+            minHeight={0}
+            aspect={2}
+          >
             <LineChart
               data={history}
               margin={{ top: 10, right: 24, left: 0, bottom: 10 }}
