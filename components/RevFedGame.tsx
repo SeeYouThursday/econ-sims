@@ -15,7 +15,6 @@ import {
   TrendingUp,
   Users,
   Calendar,
-  Lightbulb,
 } from 'lucide-react';
 import ReportCard from './ReportCard';
 import CompactStat from './CompactStat';
