@@ -48,6 +48,14 @@ export interface FedStartResponse {
   asOf: string;
 }
 
+export interface YearSummaryProps {
+  currentYear: number;
+  quarterCount: number;
+  summary: string;
+  startInflation?: number;
+  startUnemployment?: number;
+}
+
 // Future thought:
 export interface NewsEvent {
   m: string;
@@ -63,6 +71,7 @@ export interface CustomizedLabelProps {
   text?: string;
   index?: number;
   lastIndex?: number;
+  tooltip?: string;
 }
 
 export interface CompactStatProps {
@@ -70,4 +79,5 @@ export interface CompactStatProps {
   val: number;
   color: string;
   icon: React.ReactNode;
+  tooltipText?: string;
 }
