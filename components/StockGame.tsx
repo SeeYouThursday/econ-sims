@@ -288,7 +288,7 @@ export default function StockGame() {
       ) : null}
 
       <div className="rounded-4xl border border-slate-200 bg-slate-50 px-4 py-6 shadow-inner">
-        <div className="min-h-[20rem] w-full">
+        <div className="min-h-80 w-full">
           <ResponsiveContainer
             width="100%"
             height="100%"

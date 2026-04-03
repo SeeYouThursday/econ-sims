@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BookOpen, Users, Sparkles, BarChart3, Lightbulb } from 'lucide-react';
+import { BookOpen, Users, Sparkles, BarChart3 } from 'lucide-react';
 
 const featureCards = [
   {
@@ -25,8 +25,8 @@ const featureCards = [
 const Page = () => {
   return (
     <main className="bg-slate-100 text-slate-900">
-      <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
-        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top_left,_rgba(67,56,202,0.45),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(56,189,248,0.25),_transparent_30%)]" />
+      <section className="relative overflow-hidden bg-linear-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
+        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top_left,rgba(67,56,202,0.45),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(56,189,248,0.25),transparent_30%)]" />
         <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
             <div className="max-w-2xl">
@@ -59,7 +59,7 @@ const Page = () => {
               </div>
             </div>
 
-            <div className="rounded-[2rem] border border-white/10 bg-slate-950/90 p-8 shadow-2xl backdrop-blur-xl sm:p-10">
+            <div className="rounded-4xl border border-white/10 bg-slate-950/90 p-8 shadow-2xl backdrop-blur-xl sm:p-10">
               <div className="space-y-6">
                 <div className="rounded-4xl border border-white/10 bg-slate-900/80 p-6">
                   <p className="text-xs uppercase tracking-[0.28em] text-sky-300">
@@ -191,7 +191,7 @@ const Page = () => {
                 </Link>
               </div>
             </div>
-            <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-2xl">
+            <div className="rounded-4xl border border-white/10 bg-white/5 p-8 shadow-2xl">
               <div className="space-y-6">
                 <div className="flex items-center gap-3 text-slate-300">
                   <Sparkles size={20} />

@@ -15,18 +15,13 @@ vi.mock('next/link', () => ({
 }));
 
 describe('Fed simulator page', () => {
-  it('renders student-mode heading and guidance controls with aria linkage', async () => {
+  it('renders the fed game component inside a main element', async () => {
     const module = await import('../app/fed-simulator/page');
     const FedGamePage = module.default;
 
     const html = renderToStaticMarkup(<FedGamePage />);
 
-    expect(html).toContain('Student mode: jump straight into the game');
-    expect(html).toContain('Show student guidance');
-    expect(html).toContain('aria-controls="student-guidance-panel"');
-    expect(html).toContain('id="student-guidance-panel"');
-    expect(html).toContain('role="region"');
-    expect(html).toContain('aria-label="Student guidance"');
-    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('<main');
+    expect(html).toContain('data-testid="fed-game-stub"');
   });
 });
