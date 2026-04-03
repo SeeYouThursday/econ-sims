@@ -175,13 +175,13 @@ export default function FedGame() {
     };
   }, [history, quarter]);
 
-/**
- * Advance the game by one quarter, applying random shocks to the economy if necessary.
- * The economy will remain steady if no shock is applied.
- * The interest rate will affect inflation and unemployment.
- * The game will end after 16 quarters.
- * @returns {void}
- */
+  /**
+   * Advance the game by one quarter, applying random shocks to the economy if necessary.
+   * The economy will remain steady if no shock is applied.
+   * The interest rate will affect inflation and unemployment.
+   * The game will end after 16 quarters.
+   * @returns {void}
+   */
   const advanceQuarter = () => {
     if (quarter >= 16) return;
 
