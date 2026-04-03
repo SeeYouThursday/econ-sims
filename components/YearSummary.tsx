@@ -54,7 +54,7 @@ export default function YearSummary({
       <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
         Year summary
       </p>
-      <p className="mt-2 min-w-0 text-sm leading-7 text-slate-700 break-words">
+      <p className="mt-2 min-w-0 text-sm leading-7 text-slate-700 wrap-break-word">
         {withTermTooltips(summary)}
       </p>
       <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -62,8 +62,12 @@ export default function YearSummary({
         <SummaryCard label="Quarters" value={`${quarterCount}/4`} />
         <SummaryCard
           label={
-            <Tooltip text={INFLATION_TOOLTIP} position="bottom">
-              <span className="cursor-help underline decoration-dotted decoration-red-300">
+            <Tooltip
+              text={INFLATION_TOOLTIP}
+              position="bottom"
+              className="block min-w-0 max-w-full"
+            >
+              <span className="block min-w-0 whitespace-nowrap cursor-help underline decoration-dotted decoration-red-300">
                 Inflation
               </span>
             </Tooltip>
@@ -74,8 +78,12 @@ export default function YearSummary({
         />
         <SummaryCard
           label={
-            <Tooltip text={UNEMPLOYMENT_TOOLTIP} position="bottom">
-              <span className="cursor-help underline decoration-dotted decoration-blue-300">
+            <Tooltip
+              text={UNEMPLOYMENT_TOOLTIP}
+              position="bottom"
+              className="block min-w-0 max-w-full"
+            >
+              <span className="block min-w-0 whitespace-nowrap cursor-help underline decoration-dotted decoration-blue-300">
                 Unemployment
               </span>
             </Tooltip>
@@ -93,11 +101,11 @@ export default function YearSummary({
 
 function SummaryCard({ label, value }: { label: ReactNode; value: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-3xl bg-slate-50 p-3 text-xs uppercase tracking-[0.2em] text-slate-600">
-      <span className="block whitespace-nowrap font-black text-slate-900">
+    <div className="min-w-0 rounded-3xl bg-slate-50 p-3 text-xs uppercase tracking-[0.2em] text-slate-500">
+      <span className="block min-w-0 whitespace-nowrap text-[10px] font-black leading-tight tracking-[0.08em] text-slate-900">
         {label}
       </span>
-      <span className="min-w-0 break-words block mt-1 text-sm text-slate-800">
+      <span className="mt-1 block min-w-0 wrap-break-word text-sm text-slate-800">
         {value}
       </span>
     </div>

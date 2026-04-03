@@ -107,6 +107,15 @@ export default function FedGame() {
     { m: '🏗️ Construction boom! New houses everywhere.', i: 0.5, u: -0.4 },
   ];
 
+  /**
+   * Returns a string of advice based on the current state of the economy.
+   * If inflation is too high, it recommends raising interest rates.
+   * If unemployment is too high, it recommends lowering interest rates.
+   * If unemployment is too low, it recommends raising interest rates.
+   * If inflation is too low, it recommends lowering interest rates.
+   * If the economy is balanced, it recommends staying the course.
+   * @returns {string} A string of advice for the chair of the Federal Reserve.
+   */
   const getAdvice = (): string => {
     if (inflation > 3.0)
       return '⚠️ PRICES ARE TOO HIGH! Raise interest rates to cool the economy.';
@@ -166,6 +175,13 @@ export default function FedGame() {
     };
   }, [history, quarter]);
 
+  /**
+   * Advance the game by one quarter, applying random shocks to the economy if necessary.
+   * The economy will remain steady if no shock is applied.
+   * The interest rate will affect inflation and unemployment.
+   * The game will end after 16 quarters.
+   * @returns {void}
+   */
   const advanceQuarter = () => {
     if (quarter >= 16) return;
 
