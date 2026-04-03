@@ -22,6 +22,15 @@ type FedStartPayload = {
   asOf: string;
 };
 
+type FredObservation = {
+  date: string;
+  value: string;
+};
+
+type FredSeriesResponse = {
+  observations?: FredObservation[];
+};
+
 type CacheEntry = {
   payload: FedStartPayload;
   fetchedAt: number;
@@ -70,11 +79,11 @@ async function fetchFredSeries(seriesId: string) {
   if (!response.ok) {
     throw new Error(`FRED request failed for ${seriesId}: ${response.status}`);
   }
-  const json = await response.json();
+  const json = (await response.json()) as FredSeriesResponse;
   return json;
 }
 
-function parseLatestObservation(result: any) {
+function parseLatestObservation(result: FredSeriesResponse) {
   if (
     !Array.isArray(result?.observations) ||
     result.observations.length === 0
@@ -83,9 +92,6 @@ function parseLatestObservation(result: any) {
   }
 
   const latest = result.observations[0];
-  const previous = result.observations.find(
-    (item: any) => item.value !== '.' && item.value !== '',
-  );
 
   if (!latest || latest.value === '.' || latest.value === '') {
     throw new Error('Latest FRED observation is invalid.');
@@ -94,7 +100,6 @@ function parseLatestObservation(result: any) {
   return {
     latestValue: Number(latest.value),
     latestDate: latest.date,
-    previousValue: Number(previous?.value ?? latest.value),
   };
 }
 
@@ -232,7 +237,10 @@ export async function GET() {
       payload,
       'public, s-maxage=3600, stale-while-revalidate=600',
     );
-  } catch (error) {
+  } catch {
+    // Intentionally avoid branching on specific error types here.
+    // For classroom reliability, any upstream failure should degrade gracefully
+    // to stale cache (if available) and then to safe defaults.
     if (cached && now - cached.fetchedAt <= STALE_TTL_MS) {
       return buildJsonResponse(
         {

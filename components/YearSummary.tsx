@@ -1,11 +1,45 @@
 import type { ReactNode } from 'react';
+import type { YearSummaryProps } from '@/types';
+import Tooltip from './Tooltip';
 
-interface YearSummaryProps {
-  currentYear: number;
-  quarterCount: number;
-  summary: string;
-  startInflation?: number;
-  startUnemployment?: number;
+const INFLATION_TOOLTIP =
+  'When prices for everyday things go up over time. The Fed target is 2%.';
+const UNEMPLOYMENT_TOOLTIP =
+  "The share of people who want a job but can't find one. The Fed target is about 5%.";
+
+function withTermTooltips(text: string): ReactNode {
+  const parts = text.split(/\b(inflation|unemployment)\b/gi);
+
+  return parts.map((part, index) => {
+    const lower = part.toLowerCase();
+    if (lower === 'inflation') {
+      return (
+        <Tooltip
+          key={`term-${index}`}
+          text={INFLATION_TOOLTIP}
+          position="bottom"
+        >
+          <span className="cursor-help underline decoration-dotted decoration-red-300">
+            {part}
+          </span>
+        </Tooltip>
+      );
+    }
+    if (lower === 'unemployment') {
+      return (
+        <Tooltip
+          key={`term-${index}`}
+          text={UNEMPLOYMENT_TOOLTIP}
+          position="bottom"
+        >
+          <span className="cursor-help underline decoration-dotted decoration-blue-300">
+            {part}
+          </span>
+        </Tooltip>
+      );
+    }
+    return <span key={`text-${index}`}>{part}</span>;
+  });
 }
 
 export default function YearSummary({
@@ -21,19 +55,31 @@ export default function YearSummary({
         Year summary
       </p>
       <p className="mt-2 min-w-0 text-sm leading-7 text-slate-700 break-words">
-        {summary}
+        {withTermTooltips(summary)}
       </p>
       <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="Year" value={String(currentYear)} />
         <SummaryCard label="Quarters" value={`${quarterCount}/4`} />
         <SummaryCard
-          label="Inflation"
+          label={
+            <Tooltip text={INFLATION_TOOLTIP} position="bottom">
+              <span className="cursor-help underline decoration-dotted decoration-red-300">
+                Inflation
+              </span>
+            </Tooltip>
+          }
           value={
             startInflation !== undefined ? `${startInflation.toFixed(2)}%` : '—'
           }
         />
         <SummaryCard
-          label="Jobs"
+          label={
+            <Tooltip text={UNEMPLOYMENT_TOOLTIP} position="bottom">
+              <span className="cursor-help underline decoration-dotted decoration-blue-300">
+                Unemployment
+              </span>
+            </Tooltip>
+          }
           value={
             startUnemployment !== undefined
               ? `${startUnemployment.toFixed(2)}%`
@@ -45,7 +91,7 @@ export default function YearSummary({
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
+function SummaryCard({ label, value }: { label: ReactNode; value: ReactNode }) {
   return (
     <div className="min-w-0 rounded-3xl bg-slate-50 p-3 text-xs uppercase tracking-[0.2em] text-slate-600">
       <span className="block whitespace-nowrap font-black text-slate-900">

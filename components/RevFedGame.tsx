@@ -10,35 +10,32 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import {
-  ArrowRight,
-  TrendingUp,
-  Users,
-  Calendar,
-} from 'lucide-react';
+import { ArrowRight, TrendingUp, Users, Calendar } from 'lucide-react';
 import ReportCard from './ReportCard';
 import CompactStat from './CompactStat';
 import YearSummary from './YearSummary';
 import AdvisorPanel from './AdvisorPanel';
+import Tooltip from './Tooltip';
 import { fetchFedStartData } from '@/actions';
+import FedSimulatorInfoPanel from './FedSimulatorInfoPanel';
 // --- TYPES ---
 import { EconomicData, CustomizedLabelProps } from '@/types';
 
 // --- HELPER COMPONENTS ---
 const CustomizedLabel = (props: CustomizedLabelProps) => {
-  const { x, y, color, text, index, lastIndex } = props;
+  const { x, y, color, text, index, lastIndex, tooltip } = props;
   if (index !== lastIndex || x === undefined || y === undefined) return null;
 
   return (
     <g>
+      {tooltip && <title>{tooltip}</title>}
       <rect
         x={x + 2}
         y={y - 10}
-        width={48}
+        width={56}
         height={16}
         rx={4}
-        fill="white"
-        fillOpacity={0}
+        fill="transparent"
       />
       <text
         x={x + 5}
@@ -94,6 +91,7 @@ export default function FedGame() {
     };
   }, []);
 
+  const [mobileTab, setMobileTab] = useState<'chart' | 'controls'>('controls');
   const [news, setNews] = useState('Welcome, Chair. Stabilize the economy.');
   const [showHints, setShowHints] = useState(true);
   const [gameOver, setGameOver] = useState(false);
@@ -209,187 +207,254 @@ export default function FedGame() {
   };
 
   return (
-    <div className="lg:h-[90vh] max-w-5xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border flex flex-col p-6 overflow-visible select-none relative">
-      {gameOver && (
-        <ReportCard
-          history={history}
-          onRestart={() => window.location.reload()}
-        />
-      )}
-
-      <div className="flex justify-between items-center mb-6 px-2 border-b pb-4">
-        <h1 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-          🏛️ FED CHAIR ACADEMY
-        </h1>
-        <div className="flex items-center gap-3 bg-slate-100 px-4 py-1.5 rounded-full border border-slate-200">
-          <Calendar size={14} className="text-slate-500" />
-          <span className="font-black text-slate-700 text-sm uppercase tracking-tighter">
-            Year {Math.ceil(quarter / 4)} of 4
-          </span>
-        </div>
-      </div>
-
-      <div className="flex-1 grid grid-cols-1 gap-6 overflow-hidden lg:grid-cols-12">
-        {/* CHART AREA */}
-        <div className="lg:col-span-7 bg-slate-50 rounded-4xl p-5 border border-slate-100 flex flex-col shadow-inner">
-          <div className="flex justify-between items-center mb-4 px-2">
-            <div className="flex gap-4">
-              <span className="text-[10px] font-black text-red-500 flex items-center gap-1 uppercase tracking-widest">
-                ● Prices
-              </span>
-              <span className="text-[10px] font-black text-blue-600 flex items-center gap-1 uppercase tracking-widest">
-                ● Jobs
-              </span>
-            </div>
-          </div>
-
-          <YearSummary
-            currentYear={yearSummary.currentYear}
-            quarterCount={yearSummary.quarterCount}
-            summary={yearSummary.summary}
-            startInflation={yearSummary.startEntry?.inf}
-            startUnemployment={yearSummary.startEntry?.unp}
+    <>
+      <FedSimulatorInfoPanel />
+      <div className="flex-1 min-h-0 w-full max-w-6xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border flex flex-col p-6 overflow-hidden select-none relative">
+        {gameOver && (
+          <ReportCard
+            history={history}
+            onRestart={() => window.location.reload()}
           />
+        )}
 
-          <div className="flex-1 min-w-0 min-h-96 relative">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-              minWidth={3}
-              minHeight={1}
-              aspect={1.7}
-            >
-              <LineChart
-                data={history}
-                margin={{ top: 10, right: 60, left: -25, bottom: 0 }}
+        <div className="flex justify-between items-center mb-4 px-2 border-b pb-4">
+          <h1 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+            🏛️ FED CHAIR ACADEMY
+          </h1>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2.5 rounded-full bg-slate-50 border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest">
+              <Tooltip
+                text="When prices for everyday things go up over time. The Fed target is 2%."
+                position="bottom"
               >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#e2e8f0"
-                />
-                <XAxis dataKey="q" hide />
-                <YAxis
-                  domain={[0, 10]}
-                  tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <ReferenceLine
-                  y={2}
-                  stroke="#ef4444"
-                  strokeDasharray="5 5"
-                  strokeOpacity={0.5}
-                />
-                <ReferenceLine
-                  y={5}
-                  stroke="#2563eb"
-                  strokeDasharray="5 5"
-                  strokeOpacity={0.5}
-                />
-
-                <Line
-                  type="monotone"
-                  dataKey="inf"
-                  stroke="#ef4444"
-                  strokeWidth={5}
-                  dot={false}
-                  isAnimationActive={false}
-                  label={
-                    <CustomizedLabel
-                      color="#ef4444"
-                      text="PRICES"
-                      lastIndex={history.length - 1}
-                    />
-                  }
-                />
-                <Line
-                  type="monotone"
-                  dataKey="unp"
-                  stroke="#2563eb"
-                  strokeWidth={5}
-                  dot={false}
-                  isAnimationActive={false}
-                  label={
-                    <CustomizedLabel
-                      color="#2563eb"
-                      text="JOBS"
-                      lastIndex={history.length - 1}
-                    />
-                  }
-                />
-              </LineChart>
-            </ResponsiveContainer>
+                <span className="text-red-500 cursor-help underline decoration-dotted decoration-red-300">
+                  2.0% inflation
+                </span>
+              </Tooltip>
+              <span className="text-slate-300">|</span>
+              <Tooltip
+                text="The share of people who want a job but can't find one. The Fed target is about 5%."
+                position="bottom"
+              >
+                <span className="text-blue-600 cursor-help underline decoration-dotted decoration-blue-300">
+                  5.0% unemployment
+                </span>
+              </Tooltip>
+            </div>
+            <div className="flex items-center gap-3 bg-slate-100 px-4 py-1.5 rounded-full border border-slate-200">
+              <Calendar size={14} className="text-slate-500" />
+              <span className="font-black text-slate-700 text-sm uppercase tracking-tighter">
+                Year {Math.ceil(quarter / 4)} of 4
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* CONTROLS AREA */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <CompactStat
-              title="INFLATION"
-              val={inflation}
-              color="bg-red-500"
-              icon={<TrendingUp size={14} />}
+        {/* Mobile tab bar */}
+        <div className="flex lg:hidden gap-1 bg-slate-100 rounded-2xl p-1 mb-4">
+          <button
+            type="button"
+            onClick={() => setMobileTab('chart')}
+            className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition ${
+              mobileTab === 'chart'
+                ? 'bg-white shadow text-slate-900'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Chart
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab('controls')}
+            className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition ${
+              mobileTab === 'controls'
+                ? 'bg-white shadow text-slate-900'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Controls
+          </button>
+        </div>
+
+        <div className="flex-1 min-h-0 grid grid-cols-1 gap-6 overflow-hidden lg:grid-cols-12">
+          {/* CHART AREA */}
+          <div
+            className={`lg:col-span-7 bg-slate-50 rounded-4xl p-5 border border-slate-100 flex flex-col shadow-inner min-h-0${
+              mobileTab === 'controls' ? ' hidden lg:flex' : ''
+            }`}
+          >
+            <div className="flex justify-between items-center mb-4 px-2">
+              <div className="flex gap-4">
+                <Tooltip text="When prices for everyday things — like food and gas — go up over time. A little is normal. The Fed targets 2%.">
+                  <span className="text-[10px] font-black text-red-500 flex items-center gap-1 uppercase tracking-widest cursor-help">
+                    ● Prices
+                  </span>
+                </Tooltip>
+                <Tooltip text="The share of people who want a job but can't find one. Some is always normal — the Fed targets 5%.">
+                  <span className="text-[10px] font-black text-blue-600 flex items-center gap-1 uppercase tracking-widest cursor-help">
+                    ● Jobs
+                  </span>
+                </Tooltip>
+              </div>
+            </div>
+
+            <YearSummary
+              currentYear={yearSummary.currentYear}
+              quarterCount={yearSummary.quarterCount}
+              summary={yearSummary.summary}
+              startInflation={yearSummary.startEntry?.inf}
+              startUnemployment={yearSummary.startEntry?.unp}
             />
-            <CompactStat
-              title="UNEMPLOYMENT"
-              val={unemployment}
-              color="bg-blue-600"
-              icon={<Users size={14} />}
-            />
+
+            <div className="flex-1 min-w-0 min-h-0 relative">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={3}
+                minHeight={1}
+              >
+                <LineChart
+                  data={history}
+                  margin={{ top: 10, right: 60, left: -25, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#e2e8f0"
+                  />
+                  <XAxis dataKey="q" hide />
+                  <YAxis
+                    domain={[0, 10]}
+                    tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <ReferenceLine
+                    y={2}
+                    stroke="#ef4444"
+                    strokeDasharray="5 5"
+                    strokeOpacity={0.5}
+                  />
+                  <ReferenceLine
+                    y={5}
+                    stroke="#2563eb"
+                    strokeDasharray="5 5"
+                    strokeOpacity={0.5}
+                  />
+
+                  <Line
+                    type="monotone"
+                    dataKey="inf"
+                    stroke="#ef4444"
+                    strokeWidth={5}
+                    dot={false}
+                    isAnimationActive={false}
+                    label={
+                      <CustomizedLabel
+                        color="#ef4444"
+                        text="PRICES"
+                        lastIndex={history.length - 1}
+                        tooltip="When prices for everyday things go up over time. Target: 2.0%"
+                      />
+                    }
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="unp"
+                    stroke="#2563eb"
+                    strokeWidth={5}
+                    dot={false}
+                    isAnimationActive={false}
+                    label={
+                      <CustomizedLabel
+                        color="#2563eb"
+                        text="JOBS"
+                        lastIndex={history.length - 1}
+                        tooltip="The share of people who want a job but can't find one. Target: 5.0%"
+                      />
+                    }
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
-          <div className="flex-1 bg-slate-900 rounded-4xl p-6 text-white flex flex-col justify-between shadow-2xl">
-            <div className="text-center bg-slate-800/50 p-3 rounded-2xl border border-slate-700">
-              <p className="text-blue-400 font-black text-[9px] tracking-[0.2em] uppercase mb-1">
-                Briefing
-              </p>
-              <p className="text-sm font-medium italic opacity-90 leading-tight">
-                &quot;{news}&quot;
-              </p>
+          {/* CONTROLS AREA */}
+          <div
+            className={`lg:col-span-5 flex flex-col gap-4 min-h-0${
+              mobileTab === 'chart' ? ' hidden lg:flex' : ''
+            }`}
+          >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <CompactStat
+                title="INFLATION"
+                val={inflation}
+                color="bg-red-500"
+                icon={<TrendingUp size={14} />}
+                tooltipText="When prices for everyday things — like food and gas — go up over time. A little is normal. The Fed targets 2%."
+              />
+              <CompactStat
+                title="UNEMPLOYMENT"
+                val={unemployment}
+                color="bg-blue-600"
+                icon={<Users size={14} />}
+                tooltipText="The share of people who want a job but can't find one. Some is always normal — the Fed targets 5%."
+              />
             </div>
 
-            <div className="space-y-4">
-              <div className="flex justify-between items-end px-1">
-                <span className="text-slate-500 font-black text-[10px] tracking-widest uppercase">
-                  Interest Rate
-                </span>
-                <span className="text-4xl font-black tabular-nums">
-                  {interestRate.toFixed(2)}%
-                </span>
+            <div className="flex-1 bg-slate-900 rounded-4xl p-6 text-white flex flex-col justify-between shadow-2xl">
+              <div className="text-center bg-slate-800/50 p-3 rounded-2xl border border-slate-700">
+                <p className="text-blue-400 font-black text-[9px] tracking-[0.2em] uppercase mb-1">
+                  Briefing
+                </p>
+                <p className="text-sm font-medium italic opacity-90 leading-tight">
+                  &quot;{news}&quot;
+                </p>
               </div>
-              <input
-                title="interest rate"
-                type="range"
-                min="0"
-                max="10"
-                step="0.25"
-                value={interestRate}
-                onChange={(e) => setInterestRate(parseFloat(e.target.value))}
-                className="w-full h-3 bg-slate-700 rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-end px-1">
+                  <Tooltip text="The cost of borrowing money. Raising rates makes loans expensive so people spend less and prices cool down. Lowering rates encourages spending and hiring.">
+                    <span className="text-slate-100 font-black text-[10px] tracking-widest uppercase cursor-help underline decoration-dotted decoration-slate-600">
+                      Interest Rate
+                    </span>
+                  </Tooltip>
+                  <span className="text-4xl font-black tabular-nums">
+                    {interestRate.toFixed(2)}%
+                  </span>
+                </div>
+                <input
+                  title="interest rate"
+                  type="range"
+                  min="0"
+                  max="10"
+                  step="0.25"
+                  value={interestRate}
+                  onChange={(e) => setInterestRate(parseFloat(e.target.value))}
+                  className="w-full h-3 bg-slate-700 rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
+                />
+              </div>
+
+              <button
+                onClick={advanceQuarter}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl text-xl transition-all active:scale-[0.96] flex items-center justify-center gap-2 group shadow-lg"
+              >
+                NEXT QUARTER{' '}
+                <ArrowRight
+                  size={22}
+                  className="group-hover:translate-x-1 transition-transform"
+                />
+              </button>
+
+              <AdvisorPanel
+                showHints={showHints}
+                advice={getAdvice()}
+                onToggle={() => setShowHints(!showHints)}
               />
             </div>
-
-            <button
-              onClick={advanceQuarter}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl text-xl transition-all active:scale-[0.96] flex items-center justify-center gap-2 group shadow-lg"
-            >
-              NEXT QUARTER{' '}
-              <ArrowRight
-                size={22}
-                className="group-hover:translate-x-1 transition-transform"
-              />
-            </button>
-
-            <AdvisorPanel
-              showHints={showHints}
-              advice={getAdvice()}
-              onToggle={() => setShowHints(!showHints)}
-            />
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
