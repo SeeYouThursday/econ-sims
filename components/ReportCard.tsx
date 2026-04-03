@@ -77,9 +77,9 @@ const ReportCard: React.FC<ReportCardProps> = ({ history, onRestart }) => {
       <div className="flex gap-6 my-8 bg-gray-50 p-6 rounded-2xl border border-gray-200">
         <div className="text-center">
           <Tooltip text={INFLATION_TOOLTIP}>
-            <p className="text-xs font-bold text-gray-500 uppercase mb-1 cursor-help underline decoration-dotted decoration-red-300">
+            <span className="text-xs font-bold text-gray-500 uppercase mb-1 cursor-help underline decoration-dotted decoration-red-300">
               Avg Inflation
-            </p>
+            </span>
           </Tooltip>
           <p className="text-2xl font-black text-red-600">
             {avgInf.toFixed(1)}%
@@ -88,9 +88,9 @@ const ReportCard: React.FC<ReportCardProps> = ({ history, onRestart }) => {
         <div className="w-px bg-gray-300 h-12 self-center"></div>
         <div className="text-center">
           <Tooltip text={UNEMPLOYMENT_TOOLTIP}>
-            <p className="text-xs font-bold text-gray-500 uppercase mb-1 cursor-help underline decoration-dotted decoration-blue-300">
+            <span className="text-xs font-bold text-gray-500 uppercase mb-1 cursor-help underline decoration-dotted decoration-blue-300">
               Avg Unemployment
-            </p>
+            </span>
           </Tooltip>
           <p className="text-2xl font-black text-blue-600">
             {avgUnp.toFixed(1)}%

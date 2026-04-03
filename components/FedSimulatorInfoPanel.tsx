@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Tooltip from './Tooltip';
 
 const INFLATION_TOOLTIP =
@@ -10,12 +10,34 @@ const UNEMPLOYMENT_TOOLTIP =
 
 export default function FedSimulatorInfoPanel() {
   const [isOpen, setIsOpen] = useState(true);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Move focus into the dialog when it opens
+  useEffect(() => {
+    if (isOpen) {
+      dialogRef.current?.focus();
+    }
+  }, [isOpen]);
+
+  function handleClose() {
+    setIsOpen(false);
+    // Restore focus to the trigger button
+    triggerRef.current?.focus();
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') {
+      handleClose();
+    }
+  }
 
   return (
     <>
       {/* Floating Help button */}
       <div className="fixed bottom-6 right-6 z-40">
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setIsOpen(true)}
           aria-label="How to play"
@@ -28,10 +50,13 @@ export default function FedSimulatorInfoPanel() {
       {/* Instructions modal — auto-opens on first load */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4"
+          ref={dialogRef}
+          tabIndex={-1}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 focus:outline-none"
           role="dialog"
           aria-modal="true"
           aria-labelledby="fed-instructions-title"
+          onKeyDown={handleKeyDown}
         >
           <div className="w-full max-w-2xl rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-2xl sm:p-8">
             <div className="flex items-start justify-between gap-4">
@@ -48,7 +73,7 @@ export default function FedSimulatorInfoPanel() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={handleClose}
                 className="rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-700 transition hover:bg-slate-50"
               >
                 Close
@@ -142,7 +167,7 @@ export default function FedSimulatorInfoPanel() {
             <div className="mt-6 flex justify-end">
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={handleClose}
                 className="rounded-full bg-slate-900 px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition hover:bg-slate-800"
               >
                 Start simulation

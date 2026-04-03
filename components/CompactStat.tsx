@@ -13,9 +13,9 @@ const CompactStat = ({
   >
     {tooltipText ? (
       <Tooltip text={tooltipText} className="inline-flex" position="bottom">
-        <p className="flex items-center gap-1 text-[9px] font-black opacity-80 mb-1 tracking-widest uppercase cursor-help underline decoration-dotted decoration-white/70">
+        <span className="flex items-center gap-1 text-[9px] font-black opacity-80 mb-1 tracking-widest uppercase cursor-help underline decoration-dotted decoration-white/70">
           {icon} {title}
-        </p>
+        </span>
       </Tooltip>
     ) : (
       <p className="flex items-center gap-1 text-[9px] font-black opacity-80 mb-1 tracking-widest uppercase">

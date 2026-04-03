@@ -24,11 +24,11 @@ export default function Tooltip({
       : 'absolute left-1/2 top-full -translate-x-1/2 border-[5px] border-transparent border-t-slate-900';
 
   return (
-    <span className={`relative group/tip ${className}`}>
+    <span tabIndex={0} className={`relative group/tip ${className}`}>
       {children}
       <span
         role="tooltip"
-        className={`pointer-events-none absolute z-70 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-left text-xs leading-snug text-white whitespace-normal wrap-break-word opacity-0 shadow-2xl transition-opacity group-hover/tip:opacity-100 ${bubblePositionClass}`}
+        className={`pointer-events-none absolute z-[70] w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-left text-xs leading-snug text-white whitespace-normal break-words opacity-0 shadow-2xl transition-opacity group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 ${bubblePositionClass}`}
       >
         {text}
         <span className={caretClass} />
