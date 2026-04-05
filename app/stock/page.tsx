@@ -1,10 +1,10 @@
-import StockGame from '@/components/StockGame';
+import StudentSignInPanel from '@/components/StudentSignInPanel';
 
 export default function StockPage() {
   return (
-    <main className="min-h-screen bg-slate-100 px-6 py-10">
+    <main className="min-h-screen bg-slate-100 px-4 py-10 sm:px-6">
       <div className="mx-auto max-w-6xl">
-        <StockGame />
+        <StudentSignInPanel />
       </div>
     </main>
   );

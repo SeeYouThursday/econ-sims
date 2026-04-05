@@ -127,13 +127,13 @@ export default function StockGame() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl rounded-4xl bg-white p-6 shadow-2xl border border-slate-200">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between mb-6">
-        <div>
+    <div className="mx-auto max-w-5xl rounded-4xl border border-slate-200 bg-white p-4 shadow-2xl sm:p-6">
+      <div className="mb-6 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-end">
+        <div className="min-w-0">
           <p className="text-sm uppercase tracking-[0.3em] text-slate-500 font-black">
             Stock Market POC
           </p>
-          <h1 className="text-3xl font-black text-slate-900 mt-2">
+          <h1 className="mt-2 text-2xl font-black text-slate-900 sm:text-3xl">
             Simulate end-of-day trading with real market data
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
@@ -143,12 +143,12 @@ export default function StockGame() {
           </p>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-2 min-w-0">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1">
           <div className="rounded-3xl bg-slate-900 p-5 text-white shadow-xl min-w-0">
             <p className="text-[11px] uppercase tracking-[0.25em] opacity-80">
               Starting capital
             </p>
-            <p className="mt-3 text-3xl font-black wrap-break-word">
+            <p className="mt-3 text-2xl font-black wrap-break-word sm:text-3xl">
               ${STARTING_CAPITAL.toLocaleString()}
             </p>
           </div>
@@ -156,9 +156,9 @@ export default function StockGame() {
             <p className="text-[11px] uppercase tracking-[0.25em] opacity-80">
               Symbol
             </p>
-            <p className="mt-3 text-3xl font-black leading-tight">
+            <p className="mt-3 text-2xl font-black leading-tight sm:text-3xl">
               {symbol}
-              <span className="block text-base font-medium text-slate-200 pt-1">
+              <span className="block wrap-break-word pt-1 text-base font-medium text-slate-200">
                 ({selectedStock.name})
               </span>
             </p>
@@ -166,8 +166,8 @@ export default function StockGame() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[2fr_1fr] mb-6">
-        <div className="space-y-3">
+      <div className="mb-6 grid min-w-0 gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-3">
           <label className="block text-sm font-bold text-slate-700">
             Stock symbol or company name
           </label>
@@ -204,13 +204,13 @@ export default function StockGame() {
               <button
                 type="button"
                 key={stock.symbol}
-                className="rounded-3xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-slate-400"
+                className="min-w-0 rounded-3xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-slate-400"
                 onClick={() => setQuery(stock.symbol)}
               >
                 <span className="block uppercase tracking-[0.12em] text-[10px] text-slate-500">
                   {stock.symbol}
                 </span>
-                <span className="block text-sm font-bold text-slate-900">
+                <span className="block wrap-break-word text-sm font-bold text-slate-900">
                   {stock.name}
                 </span>
               </button>
@@ -222,14 +222,14 @@ export default function StockGame() {
           </p>
         </div>
 
-        <div className="rounded-3xl bg-slate-50 p-5 border border-slate-200">
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-slate-50 p-5">
           <p className="text-xs uppercase tracking-[0.25em] text-slate-500 font-black">
             Overview
           </p>
           <div className="mt-4 space-y-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-sm text-slate-600">Last updated</span>
-              <span className="font-bold text-slate-900">
+              <span className="font-bold text-slate-900 wrap-break-word sm:text-right">
                 {lastUpdated || '—'}
               </span>
             </div>
@@ -241,7 +241,7 @@ export default function StockGame() {
               <>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-sm text-slate-600">Price change</span>
-                  <span className="font-bold text-slate-900">
+                  <span className="font-bold text-slate-900 sm:text-right">
                     {performance.gain}%
                   </span>
                 </div>
@@ -249,7 +249,7 @@ export default function StockGame() {
                   <span className="text-sm text-slate-600">
                     Estimated value
                   </span>
-                  <span className="font-bold text-slate-900">
+                  <span className="font-bold text-slate-900 wrap-break-word sm:text-right">
                     ${performance.finalValue.toLocaleString()}
                   </span>
                 </div>
@@ -257,22 +257,26 @@ export default function StockGame() {
             ) : null}
           </div>
 
-          <div className="mt-6 rounded-3xl bg-white p-4 border border-slate-200">
+          <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-slate-500 font-black">
               Stock legend
             </p>
             <div className="mt-4 space-y-2 text-sm text-slate-700">
-              <div className="flex items-center justify-between gap-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start gap-3">
                 <span className="font-semibold">Symbol</span>
-                <span>{selectedStock.symbol}</span>
+                <span className="text-right wrap-break-word">
+                  {selectedStock.symbol}
+                </span>
               </div>
-              <div className="flex items-center justify-between gap-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start gap-3">
                 <span className="font-semibold">Full name</span>
-                <span>{selectedStock.name}</span>
+                <span className="text-right wrap-break-word">
+                  {selectedStock.name}
+                </span>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start gap-3">
                 <span className="font-semibold">Description</span>
-                <span className="max-w-full text-slate-600 sm:max-w-[65%]">
+                <span className="text-right text-slate-600 wrap-break-word">
                   {selectedStock.description}
                 </span>
               </div>
@@ -287,18 +291,12 @@ export default function StockGame() {
         </div>
       ) : null}
 
-      <div className="rounded-4xl border border-slate-200 bg-slate-50 px-4 py-6 shadow-inner">
-        <div className="min-h-80 w-full">
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-            minWidth={0}
-            minHeight={0}
-            aspect={2}
-          >
+      <div className="rounded-4xl border border-slate-200 bg-slate-50 px-3 py-4 shadow-inner sm:px-4 sm:py-6">
+        <div className="h-72 w-full min-w-0 sm:h-80 lg:h-96">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart
               data={history}
-              margin={{ top: 10, right: 24, left: 0, bottom: 10 }}
+              margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
             >
               <CartesianGrid
                 strokeDasharray="4 4"
