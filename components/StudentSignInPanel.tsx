@@ -2,13 +2,8 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-
-type LoginResponse = {
-  token: string;
-  classroomCode: string;
-  username: string;
-  expiresAt: string;
-};
+import { saveStudentSession } from './student-game/sessionStorage';
+import { StudentSession } from './student-game/types';
 
 function getErrorMessage(value: unknown) {
   if (!value || typeof value !== 'object') {
@@ -19,13 +14,17 @@ function getErrorMessage(value: unknown) {
   return typeof candidate.error === 'string' ? candidate.error : null;
 }
 
-export default function StudentSignInPanel() {
+export default function StudentSignInPanel({
+  onSignedIn,
+}: {
+  onSignedIn?: (session: StudentSession) => void;
+}) {
   const [classroomCode, setClassroomCode] = useState('');
   const [username, setUsername] = useState('');
   const [studentPasscode, setStudentPasscode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<LoginResponse | null>(null);
+  const [session, setSession] = useState<StudentSession | null>(null);
 
   const signIn = async () => {
     if (!classroomCode.trim() || !username.trim() || !studentPasscode.trim()) {
@@ -53,7 +52,7 @@ export default function StudentSignInPanel() {
         return;
       }
 
-      const candidate = payload as Partial<LoginResponse>;
+      const candidate = payload as Partial<StudentSession>;
       if (
         typeof candidate.token !== 'string' ||
         typeof candidate.classroomCode !== 'string' ||
@@ -64,7 +63,7 @@ export default function StudentSignInPanel() {
         return;
       }
 
-      const authSession: LoginResponse = {
+      const authSession: StudentSession = {
         token: candidate.token,
         classroomCode: candidate.classroomCode,
         username: candidate.username,
@@ -72,7 +71,8 @@ export default function StudentSignInPanel() {
       };
 
       setSession(authSession);
-      localStorage.setItem('stockGameSession', JSON.stringify(authSession));
+      saveStudentSession(authSession);
+      onSignedIn?.(authSession);
       setStudentPasscode('');
     } catch {
       setError('Unable to sign in right now.');
