@@ -23,6 +23,46 @@ type DeleteStudentBody = {
   username?: string;
 };
 
+async function createStudentWithTeacherResync(
+  body: CreateStudentBody,
+  teacherUserId: string | null,
+) {
+  const createInput = {
+    classroomCode: body.classroomCode ?? '',
+    teacherPasscode: body.teacherPasscode ?? '',
+    teacherUserId: teacherUserId ?? undefined,
+    username: body.username ?? '',
+    studentPasscode: body.studentPasscode ?? '',
+  };
+
+  try {
+    return await createStudent(createInput);
+  } catch (error) {
+    // If game state lost this classroom between requests, re-sync once from the
+    // teacher ownership source of truth, then retry student creation.
+    if (
+      teacherUserId &&
+      error instanceof StockGameError &&
+      error.status === 404 &&
+      error.message === 'Classroom was not found.'
+    ) {
+      const classroom = await assertTeacherOwnsClassroom(
+        teacherUserId,
+        body.classroomCode ?? '',
+      );
+      await ensureTeacherClassroom({
+        classroomCode: classroom.code,
+        teacherUserId,
+        title: classroom.title,
+      });
+
+      return createStudent(createInput);
+    }
+
+    throw error;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CreateStudentBody;
@@ -40,13 +80,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const student = await createStudent({
-      classroomCode: body.classroomCode ?? '',
-      teacherPasscode: body.teacherPasscode ?? '',
-      teacherUserId: teacherUserId ?? undefined,
-      username: body.username ?? '',
-      studentPasscode: body.studentPasscode ?? '',
-    });
+    const student = await createStudentWithTeacherResync(body, teacherUserId);
 
     return NextResponse.json(student, { status: 201 });
   } catch (error) {
