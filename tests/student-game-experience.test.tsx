@@ -43,9 +43,9 @@ describe('StudentGameExperience', () => {
       clearStudentSession: vi.fn(),
     }));
 
-    const module =
+    const experienceModule =
       await import('../components/student-game/StudentGameExperience');
-    const StudentGameExperience = module.default;
+    const StudentGameExperience = experienceModule.default;
 
     const html = renderToStaticMarkup(<StudentGameExperience />);
 
@@ -53,7 +53,7 @@ describe('StudentGameExperience', () => {
     expect(html).not.toContain('data-testid="dashboard-stub"');
   });
 
-  it('renders dashboard when valid session exists', async () => {
+  it('still renders sign-in panel during SSR even when session exists', async () => {
     vi.doMock('../components/student-game/sessionStorage', () => ({
       loadStudentSession: vi.fn(() => ({
         token: 'token_1',
@@ -64,13 +64,13 @@ describe('StudentGameExperience', () => {
       clearStudentSession: vi.fn(),
     }));
 
-    const module =
+    const experienceModule =
       await import('../components/student-game/StudentGameExperience');
-    const StudentGameExperience = module.default;
+    const StudentGameExperience = experienceModule.default;
 
     const html = renderToStaticMarkup(<StudentGameExperience />);
 
-    expect(html).toContain('data-testid="dashboard-stub"');
-    expect(html).toContain('student_01::ABC123');
+    expect(html).toContain('data-testid="sign-in-stub"');
+    expect(html).not.toContain('data-testid="dashboard-stub"');
   });
 });

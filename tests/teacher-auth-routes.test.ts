@@ -51,4 +51,43 @@ describe('teacher-protected stock game routes', () => {
     const payload = (await response.json()) as { error: string };
     expect(payload.error).toContain('Teacher sign-in is required');
   });
+
+  it('rejects student roster access without a signed-in teacher when Clerk is enabled', async () => {
+    vi.doMock('@clerk/nextjs/server', () => ({
+      auth: vi.fn(async () => ({ userId: null })),
+    }));
+
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+    const response = await studentsRoute.GET(
+      new Request(
+        'http://localhost/api/stock-game/students?classroomCode=DEMO101',
+      ),
+    );
+
+    expect(response.status).toBe(401);
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toContain('Teacher sign-in is required');
+  });
+
+  it('rejects student management actions without a signed-in teacher when Clerk is enabled', async () => {
+    vi.doMock('@clerk/nextjs/server', () => ({
+      auth: vi.fn(async () => ({ userId: null })),
+    }));
+
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+    const response = await studentsRoute.PATCH(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          classroomCode: 'DEMO101',
+          username: 'student_01',
+          action: 'deactivate',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toContain('Teacher sign-in is required');
+  });
 });

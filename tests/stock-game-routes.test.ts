@@ -268,6 +268,144 @@ describe('/api/stock-game routes', () => {
     expect(authRes.status).toBe(404);
   });
 
+  it('resets, deactivates, and reactivates student accounts via teacher actions', async () => {
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+    const authRoute = await import('../app/api/stock-game/auth/route');
+    const tradesRoute = await import('../app/api/stock-game/trades/route');
+    const portfolioRoute =
+      await import('../app/api/stock-game/portfolio/route');
+
+    const createRes = await studentsRoute.POST(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          username: 'student_e1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(createRes.status).toBe(201);
+
+    const loginBefore = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_e1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(loginBefore.status).toBe(200);
+    const loginBeforePayload = (await loginBefore.json()) as { token: string };
+
+    await tradesRoute.POST(
+      new Request('http://localhost/api/stock-game/trades', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: loginBeforePayload.token,
+          symbol: 'MSFT',
+          side: 'buy',
+          shares: 5,
+          price: 100,
+        }),
+      }),
+    );
+
+    const resetRes = await studentsRoute.PATCH(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          username: 'student_e1',
+          action: 'reset',
+        }),
+      }),
+    );
+    expect(resetRes.status).toBe(200);
+
+    const loginAfterReset = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_e1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(loginAfterReset.status).toBe(200);
+    const loginAfterResetPayload = (await loginAfterReset.json()) as {
+      token: string;
+    };
+
+    const portfolioAfterResetRes = await portfolioRoute.GET(
+      new Request(
+        `http://localhost/api/stock-game/portfolio?token=${loginAfterResetPayload.token}`,
+      ),
+    );
+    expect(portfolioAfterResetRes.status).toBe(200);
+    const portfolioAfterReset = (await portfolioAfterResetRes.json()) as {
+      cash: number;
+      positions: Record<string, number>;
+    };
+    expect(portfolioAfterReset.cash).toBe(10000);
+    expect(Object.keys(portfolioAfterReset.positions)).toHaveLength(0);
+
+    const deactivateRes = await studentsRoute.PATCH(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          username: 'student_e1',
+          action: 'deactivate',
+        }),
+      }),
+    );
+    expect(deactivateRes.status).toBe(200);
+
+    const loginWhileDeactivated = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_e1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(loginWhileDeactivated.status).toBe(403);
+
+    const reactivateRes = await studentsRoute.PATCH(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          username: 'student_e1',
+          action: 'activate',
+        }),
+      }),
+    );
+    expect(reactivateRes.status).toBe(200);
+
+    const loginAfterReactivation = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_e1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(loginAfterReactivation.status).toBe(200);
+  });
+
   it('rejects non-alias username to minimize personal data', async () => {
     const studentsRoute = await import('../app/api/stock-game/students/route');
 

@@ -113,22 +113,37 @@ export default function SiteHeader({
               Try Fed Simulator
             </Link>
             {clerkEnabled ? (
-              <>
-                <Link
-                  href="/sign-in"
-                  onClick={() => setMenuOpen(false)}
-                  className="block rounded-3xl px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-                >
-                  Teacher Sign In
-                </Link>
-                <Link
-                  href="/sign-up"
-                  onClick={() => setMenuOpen(false)}
-                  className="block rounded-3xl px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-                >
-                  Teacher Sign Up
-                </Link>
-              </>
+              isSignedIn ? (
+                <>
+                  <Link
+                    href="/teacher"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-3xl px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    Teacher Dashboard
+                  </Link>
+                  <div className="rounded-3xl px-4 py-2">
+                    <UserButton />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/sign-in"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-3xl px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    Teacher Sign In
+                  </Link>
+                  <Link
+                    href="/sign-up"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-3xl px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    Teacher Sign Up
+                  </Link>
+                </>
+              )
             ) : (
               <Link
                 href="/teacher"

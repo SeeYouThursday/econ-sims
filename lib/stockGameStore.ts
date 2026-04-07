@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'crypto';
 import { getRedisClient, isRedisConfigured } from './redis';
+import { __resetStudentAliasStore } from './studentAliasStore';
 
 type TradeSide = 'buy' | 'sell';
 
@@ -16,6 +17,7 @@ type Student = {
   classroomCode: string;
   username: string;
   passcodeHash: string;
+  isActive?: boolean;
   cash: number;
   positions: Record<string, number>;
   createdAt: string;
@@ -113,6 +115,31 @@ type TeacherAuditInput = {
   teacherUserId?: string;
 };
 
+type ListStudentsInput = {
+  classroomCode: string;
+  teacherPasscode?: string;
+  teacherUserId?: string;
+};
+
+type ClassroomStudentSummary = {
+  studentId: string;
+  username: string;
+  createdAt: string;
+  isActive: boolean;
+  cash: number;
+  holdingsValue: number;
+  totalValue: number;
+  hasActiveSession: boolean;
+};
+
+type ManageStudentInput = {
+  classroomCode: string;
+  teacherPasscode?: string;
+  teacherUserId?: string;
+  username: string;
+  action: 'reset' | 'deactivate' | 'activate';
+};
+
 export class StockGameError extends Error {
   status: number;
 
@@ -195,6 +222,10 @@ function normalizeSymbol(value: string) {
 
 function makeClassAndUserKey(classroomCode: string, username: string) {
   return `${classroomCode}::${normalizeUsername(username)}`;
+}
+
+function isStudentActive(student: Student) {
+  return student.isActive !== false;
 }
 
 function validateUsername(username: string) {
@@ -315,12 +346,17 @@ async function loadState() {
 
   try {
     const raw = await redis.get(STATE_KEY);
+    const fallbackState = globalThis.__stockGameState;
     const state = raw
       ? (JSON.parse(raw) as PersistedState)
-      : createEmptyState();
+      : (fallbackState ?? createEmptyState());
     const beforeSeedCount = Object.keys(state.classrooms).length;
     ensureSeedClassroom(state);
     const purged = purgeExpiredData(state);
+
+    // Keep process-local fallback in sync so request paths in the same dev
+    // process can continue when Redis writes are intermittently failing.
+    globalThis.__stockGameState = state;
 
     if (
       !raw ||
@@ -621,6 +657,7 @@ export async function createStudent(input: CreateStudentInput) {
     classroomCode,
     username,
     passcodeHash: hashSecret(studentPasscode),
+    isActive: true,
     cash: STARTING_CASH,
     positions: {},
     createdAt: nowIso(),
@@ -658,6 +695,10 @@ export async function loginStudent(input: LoginInput) {
   const student = state.students[studentId];
   if (!student || student.passcodeHash !== hashSecret(studentPasscode)) {
     throw new StockGameError('Invalid username or passcode.', 401);
+  }
+
+  if (!isStudentActive(student)) {
+    throw new StockGameError('Student account is inactive.', 403);
   }
 
   const token = randomUUID();
@@ -904,10 +945,111 @@ export async function getTeacherAudit(input: TeacherAuditInput) {
   };
 }
 
+export async function listStudentsForClassroom(input: ListStudentsInput) {
+  const state = await loadState();
+  const classroomCode = validateClassroomCode(input.classroomCode);
+  const teacherPasscode = input.teacherPasscode
+    ? validatePasscode(input.teacherPasscode, 'Teacher passcode')
+    : undefined;
+
+  ensureClassroom(state, classroomCode, teacherPasscode, input.teacherUserId);
+
+  const activeStudentIds = new Set(
+    Object.values(state.sessions)
+      .filter((session) => session.classroomCode === classroomCode)
+      .map((session) => session.studentId),
+  );
+
+  const students: ClassroomStudentSummary[] = Object.values(state.students)
+    .filter((student) => student.classroomCode === classroomCode)
+    .map((student) => {
+      const portfolio = getPortfolioSnapshot(state, student);
+      return {
+        studentId: student.id,
+        username: student.username,
+        createdAt: student.createdAt,
+        isActive: isStudentActive(student),
+        cash: portfolio.cash,
+        holdingsValue: portfolio.holdingsValue,
+        totalValue: portfolio.totalValue,
+        hasActiveSession: activeStudentIds.has(student.id),
+      };
+    })
+    .sort((a, b) => a.username.localeCompare(b.username));
+
+  return {
+    classroomCode,
+    asOf: nowIso(),
+    studentCount: students.length,
+    students,
+    piiIncluded: false,
+    storage: isRedisConfigured() ? 'redis' : 'memory',
+  };
+}
+
+export async function manageStudent(input: ManageStudentInput) {
+  const state = await loadState();
+  const classroomCode = validateClassroomCode(input.classroomCode);
+  const teacherPasscode = input.teacherPasscode
+    ? validatePasscode(input.teacherPasscode, 'Teacher passcode')
+    : undefined;
+  const username = validateUsername(input.username);
+
+  ensureClassroom(state, classroomCode, teacherPasscode, input.teacherUserId);
+
+  const key = makeClassAndUserKey(classroomCode, username);
+  const studentId = state.studentsByClassAndName[key];
+  if (!studentId) {
+    throw new StockGameError('Student account was not found.', 404);
+  }
+
+  const student = state.students[studentId];
+  if (!student) {
+    throw new StockGameError('Student account was not found.', 404);
+  }
+
+  if (input.action === 'reset') {
+    student.cash = STARTING_CASH;
+    student.positions = {};
+
+    for (const [token, session] of Object.entries(state.sessions)) {
+      if (session.studentId === studentId) {
+        delete state.sessions[token];
+      }
+    }
+
+    state.trades = state.trades.filter(
+      (trade) => trade.studentId !== studentId,
+    );
+  } else if (input.action === 'deactivate') {
+    student.isActive = false;
+
+    for (const [token, session] of Object.entries(state.sessions)) {
+      if (session.studentId === studentId) {
+        delete state.sessions[token];
+      }
+    }
+  } else if (input.action === 'activate') {
+    student.isActive = true;
+  }
+
+  await saveState(state);
+  await clearCachedLeaderboard(classroomCode);
+
+  return {
+    classroomCode,
+    username,
+    action: input.action,
+    isActive: isStudentActive(student),
+    storage: isRedisConfigured() ? 'redis' : 'memory',
+  };
+}
+
 export async function __resetStockGameState() {
   delete globalThis.__stockGameState;
   getMemoryLeaderboardCache().clear();
   hasLoggedRedisFallback = false;
+  __resetStudentAliasStore();
 
   if (!isRedisConfigured()) {
     return;

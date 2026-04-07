@@ -1,11 +1,4 @@
-import dynamic from 'next/dynamic';
-
-const StudentGameExperience = dynamic(
-  () => import('@/components/student-game/StudentGameExperience'),
-  {
-    ssr: false,
-  },
-);
+import StudentGameExperience from '@/components/student-game/StudentGameExperience';
 
 export default function StockPage() {
   return (

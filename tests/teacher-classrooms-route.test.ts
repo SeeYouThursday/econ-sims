@@ -77,5 +77,49 @@ describe('teacher classroom routes', () => {
     };
     expect(payload.classroomCode).toBe(classroom.code);
     expect(payload.username).toBe('student_a1');
+
+    const rosterRes = await studentsRoute.GET(
+      new Request(
+        `http://localhost/api/stock-game/students?classroomCode=${classroom.code}`,
+      ),
+    );
+
+    expect(rosterRes.status).toBe(200);
+    const rosterPayload = (await rosterRes.json()) as {
+      classroomCode: string;
+      studentCount: number;
+      students: Array<{ username: string }>;
+      piiIncluded: boolean;
+    };
+
+    expect(rosterPayload.classroomCode).toBe(classroom.code);
+    expect(rosterPayload.studentCount).toBe(1);
+    expect(rosterPayload.students[0]?.username).toBe('student_a1');
+    expect(rosterPayload.piiIncluded).toBe(false);
+
+    const auditRoute = await import('../app/api/stock-game/audit/route');
+    const auditRes = await auditRoute.POST(
+      new Request('http://localhost/api/stock-game/audit', {
+        method: 'POST',
+        body: JSON.stringify({ classroomCode: classroom.code }),
+      }),
+    );
+
+    expect(auditRes.status).toBe(200);
+    const auditPayload = (await auditRes.json()) as {
+      classroomCode: string;
+      studentCount: number;
+      activeSessionCount: number;
+      tradeCount: number;
+      topSymbols: Array<{ symbol: string; trades: number }>;
+      piiIncluded: boolean;
+    };
+
+    expect(auditPayload.classroomCode).toBe(classroom.code);
+    expect(auditPayload.studentCount).toBe(1);
+    expect(auditPayload.activeSessionCount).toBe(0);
+    expect(auditPayload.tradeCount).toBe(0);
+    expect(auditPayload.topSymbols).toEqual([]);
+    expect(auditPayload.piiIncluded).toBe(false);
   });
 });

@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -12,8 +11,8 @@ describe('Teacher page', () => {
     delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
     delete process.env.CLERK_SECRET_KEY;
 
-    const module = await import('../app/teacher/page');
-    const TeacherPage = module.default;
+    const teacherPageModule = await import('../app/teacher/page');
+    const TeacherPage = teacherPageModule.default;
 
     const html = renderToStaticMarkup(await TeacherPage());
 

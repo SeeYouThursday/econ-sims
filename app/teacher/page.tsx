@@ -53,12 +53,9 @@ export default async function TeacherPage() {
           >
             Open stock lesson
           </Link>
-          <Link
-            href="/sign-in"
-            className="rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm font-black uppercase tracking-[0.2em] text-slate-700 transition hover:border-slate-300"
-          >
-            Manage teacher session
-          </Link>
+          <div className="rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold text-slate-700">
+            Manage teacher session from the account menu in the header.
+          </div>
         </div>
         <TeacherDashboardPanel initialClassrooms={classrooms} />
       </div>

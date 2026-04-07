@@ -1,26 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import StudentSignInPanel from '../StudentSignInPanel';
 import { clearStudentSession, loadStudentSession } from './sessionStorage';
 import StudentDashboard from './StudentDashboard';
 import { StudentSession } from './types';
 
 export default function StudentGameExperience() {
-  const [session, setSession] = useState<StudentSession | null>(() => {
+  const [session, setSession] = useState<StudentSession | null>(null);
+
+  useEffect(() => {
     const loaded = loadStudentSession();
     if (!loaded) {
-      return null;
+      return;
     }
 
     const expiresAtMs = Date.parse(loaded.expiresAt);
     if (Number.isFinite(expiresAtMs) && expiresAtMs > Date.now()) {
-      return loaded;
+      const timeoutId = window.setTimeout(() => {
+        setSession(loaded);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
     }
 
     clearStudentSession();
-    return null;
-  });
+  }, []);
 
   const handleSignOut = () => {
     clearStudentSession();

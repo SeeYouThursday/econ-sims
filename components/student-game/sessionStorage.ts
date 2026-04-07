@@ -1,6 +1,6 @@
 import { StudentSession } from './types';
 
-const SESSION_KEY = 'stockGameSession';
+const SESSION_KEY = 'econ-sims:stock-game:student-session:v1';
 
 function isStudentSession(value: unknown): value is StudentSession {
   if (!value || typeof value !== 'object') {
