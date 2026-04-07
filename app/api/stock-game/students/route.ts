@@ -3,7 +3,6 @@ import { TeacherAuthError, requireTeacherAuth } from '@/lib/clerk';
 import { assertTeacherOwnsClassroom } from '@/lib/teacherStore';
 import {
   deleteStudentAlias,
-  listStudentAliasesByClassroom,
   setStudentAliasActive,
   upsertStudentAlias,
 } from '@/lib/studentAliasStore';
@@ -15,6 +14,11 @@ import {
   manageStudent,
   StockGameError,
 } from '@/lib/stockGameStore';
+import {
+  isClassroomNotFoundError,
+  logStockGameFallback,
+  safeListStudentAliasesWithFallback,
+} from '../fallbacks';
 
 export const runtime = 'nodejs';
 
@@ -63,15 +67,70 @@ type RosterResponse = {
   storage: string;
 };
 
-async function safeListStudentAliases(classroomCode: string) {
-  try {
-    return await listStudentAliasesByClassroom(classroomCode);
-  } catch {
+function buildRosterStudent(
+  alias: {
+    id: string;
+    username: string;
+    createdAt: string;
+    isActive: boolean;
+  },
+  stock?: RosterStudent,
+): RosterStudent {
+  if (stock) {
     return {
-      aliases: [],
-      storage: 'memory' as const,
+      ...stock,
+      studentId: stock.studentId || alias.id,
+      createdAt: stock.createdAt || alias.createdAt,
+      isActive: alias.isActive,
     };
   }
+
+  return {
+    studentId: alias.id,
+    username: alias.username,
+    createdAt: alias.createdAt,
+    isActive: alias.isActive,
+    cash: 0,
+    holdingsValue: 0,
+    totalValue: 0,
+    hasActiveSession: false,
+  };
+}
+
+function buildRosterResponse({
+  classroomCode,
+  aliases,
+  storage,
+  stockRoster,
+}: {
+  classroomCode: string;
+  aliases: Array<{
+    id: string;
+    username: string;
+    createdAt: string;
+    isActive: boolean;
+  }>;
+  storage: string;
+  stockRoster: RosterResponse | null;
+}): RosterResponse {
+  const stockByUsername = new Map(
+    (stockRoster?.students ?? []).map((student) => [student.username, student]),
+  );
+
+  const students = aliases
+    .map((alias) =>
+      buildRosterStudent(alias, stockByUsername.get(alias.username)),
+    )
+    .sort((a, b) => a.username.localeCompare(b.username));
+
+  return {
+    classroomCode,
+    asOf: stockRoster?.asOf ?? new Date().toISOString(),
+    studentCount: students.length,
+    students,
+    piiIncluded: false,
+    storage,
+  };
 }
 
 async function runWithTeacherClassroomResync<T>({
@@ -86,12 +145,7 @@ async function runWithTeacherClassroomResync<T>({
   try {
     return await run();
   } catch (error) {
-    if (
-      teacherUserId &&
-      error instanceof StockGameError &&
-      error.status === 404 &&
-      error.message === 'Classroom was not found.'
-    ) {
+    if (teacherUserId && isClassroomNotFoundError(error)) {
       const classroom = await assertTeacherOwnsClassroom(
         teacherUserId,
         classroomCode,
@@ -126,12 +180,7 @@ async function createStudentWithTeacherResync(
   } catch (error) {
     // If game state lost this classroom between requests, re-sync once from the
     // teacher ownership source of truth, then retry student creation.
-    if (
-      teacherUserId &&
-      error instanceof StockGameError &&
-      error.status === 404 &&
-      error.message === 'Classroom was not found.'
-    ) {
+    if (teacherUserId && isClassroomNotFoundError(error)) {
       const classroom = await assertTeacherOwnsClassroom(
         teacherUserId,
         body.classroomCode ?? '',
@@ -284,7 +333,10 @@ export async function GET(request: Request) {
     }
 
     const classroomCode = query.classroomCode ?? '';
-    const aliasData = await safeListStudentAliases(classroomCode);
+    const aliasData = await safeListStudentAliasesWithFallback(
+      'students',
+      classroomCode,
+    );
 
     let stockRoster: RosterResponse | null = null;
     try {
@@ -299,58 +351,23 @@ export async function GET(request: Request) {
           }),
       });
     } catch (error) {
-      if (
-        teacherUserId &&
-        error instanceof StockGameError &&
-        error.status === 404 &&
-        error.message === 'Classroom was not found.'
-      ) {
+      if (teacherUserId && isClassroomNotFoundError(error)) {
+        logStockGameFallback('students', 'stock_roster_unavailable', {
+          classroomCode,
+          teacherUserId,
+        });
         stockRoster = null;
       } else {
         throw error;
       }
     }
 
-    const stockByUsername = new Map(
-      (stockRoster?.students ?? []).map((student) => [
-        student.username,
-        student,
-      ]),
-    );
-
-    const students: RosterStudent[] = aliasData.aliases.map((alias) => {
-      const stock = stockByUsername.get(alias.username);
-      if (stock) {
-        return {
-          ...stock,
-          studentId: stock.studentId || alias.id,
-          createdAt: stock.createdAt || alias.createdAt,
-          isActive: alias.isActive,
-        };
-      }
-
-      return {
-        studentId: alias.id,
-        username: alias.username,
-        createdAt: alias.createdAt,
-        isActive: alias.isActive,
-        cash: 0,
-        holdingsValue: 0,
-        totalValue: 0,
-        hasActiveSession: false,
-      };
-    });
-
-    students.sort((a, b) => a.username.localeCompare(b.username));
-
-    const roster: RosterResponse = {
+    const roster = buildRosterResponse({
       classroomCode,
-      asOf: stockRoster?.asOf ?? new Date().toISOString(),
-      studentCount: students.length,
-      students,
-      piiIncluded: false,
+      aliases: aliasData.aliases,
       storage: aliasData.storage,
-    };
+      stockRoster,
+    });
 
     return NextResponse.json(roster);
   } catch (error) {

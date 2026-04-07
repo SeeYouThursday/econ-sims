@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import { TeacherAuthError, requireTeacherAuth } from '@/lib/clerk';
 import { assertTeacherOwnsClassroom } from '@/lib/teacherStore';
-import { listStudentAliasesByClassroom } from '@/lib/studentAliasStore';
 import {
   ensureTeacherClassroom,
   getTeacherAudit,
   StockGameError,
 } from '@/lib/stockGameStore';
+import {
+  isClassroomNotFoundError,
+  logStockGameFallback,
+  safeListStudentAliasesWithFallback,
+} from '../fallbacks';
 
 export const runtime = 'nodejs';
 
@@ -15,15 +19,28 @@ type AuditBody = {
   teacherPasscode?: string;
 };
 
-async function safeListStudentAliases(classroomCode: string) {
-  try {
-    return await listStudentAliasesByClassroom(classroomCode);
-  } catch {
-    return {
-      aliases: [],
-      storage: 'memory' as const,
-    };
-  }
+function buildBaselineAudit({
+  classroomCode,
+  studentCount,
+  storage,
+}: {
+  classroomCode: string;
+  studentCount: number;
+  storage: string;
+}) {
+  return {
+    classroomCode,
+    asOf: new Date().toISOString(),
+    retentionDays: 180,
+    studentCount,
+    activeSessionCount: 0,
+    tradeCount: 0,
+    buyCount: 0,
+    sellCount: 0,
+    topSymbols: [] as Array<{ symbol: string; trades: number }>,
+    storage,
+    piiIncluded: false,
+  };
 }
 
 async function getAuditWithTeacherResync(
@@ -39,12 +56,7 @@ async function getAuditWithTeacherResync(
   try {
     return await getTeacherAudit(auditInput);
   } catch (error) {
-    if (
-      teacherUserId &&
-      error instanceof StockGameError &&
-      error.status === 404 &&
-      error.message === 'Classroom was not found.'
-    ) {
+    if (teacherUserId && isClassroomNotFoundError(error)) {
       const classroom = await assertTeacherOwnsClassroom(
         teacherUserId,
         body.classroomCode ?? '',
@@ -80,20 +92,15 @@ export async function POST(request: Request) {
     }
 
     const classroomCode = body.classroomCode ?? '';
-    const aliasData = await safeListStudentAliases(classroomCode);
-    let audit = {
+    const aliasData = await safeListStudentAliasesWithFallback(
+      'audit',
       classroomCode,
-      asOf: new Date().toISOString(),
-      retentionDays: 180,
+    );
+    let audit = buildBaselineAudit({
+      classroomCode,
       studentCount: aliasData.aliases.length,
-      activeSessionCount: 0,
-      tradeCount: 0,
-      buyCount: 0,
-      sellCount: 0,
-      topSymbols: [] as Array<{ symbol: string; trades: number }>,
       storage: aliasData.storage,
-      piiIncluded: false,
-    };
+    });
 
     try {
       const stockAudit = await getAuditWithTeacherResync(body, teacherUserId);
@@ -103,13 +110,11 @@ export async function POST(request: Request) {
         storage: aliasData.storage,
       };
     } catch (error) {
-      if (
-        teacherUserId &&
-        error instanceof StockGameError &&
-        error.status === 404 &&
-        error.message === 'Classroom was not found.'
-      ) {
-        // Keep Neon alias-based baseline audit payload.
+      if (teacherUserId && isClassroomNotFoundError(error)) {
+        logStockGameFallback('audit', 'stock_audit_unavailable', {
+          classroomCode,
+          teacherUserId,
+        });
       } else {
         throw error;
       }

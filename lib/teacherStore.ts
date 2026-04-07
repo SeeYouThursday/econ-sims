@@ -66,6 +66,17 @@ function generateClassroomCode() {
   return result;
 }
 
+function toObjectRows(rows: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows.filter(
+    (row): row is Record<string, unknown> =>
+      Boolean(row) && typeof row === 'object' && !Array.isArray(row),
+  );
+}
+
 async function ensureTeacherTables() {
   if (!isNeonConfigured()) {
     return;
@@ -112,26 +123,22 @@ async function getOrCreateTeacherRecord(
 
   await ensureTeacherTables();
   const sql = getNeonSql();
-  const rows = await sql<{
-    id: string;
-    clerk_user_id: string;
-    created_at: string;
-  }>`
+  const rows = await sql`
     INSERT INTO stock_game_teachers (id, clerk_user_id)
     VALUES (${randomUUID()}, ${clerkUserId})
     ON CONFLICT (clerk_user_id) DO UPDATE SET clerk_user_id = EXCLUDED.clerk_user_id
     RETURNING id, clerk_user_id, created_at
   `;
 
-  const teacher = rows[0];
+  const teacher = toObjectRows(rows)[0];
   if (!teacher) {
     throw new Error('Unable to load teacher record.');
   }
 
   return {
-    id: teacher.id,
-    clerkUserId: teacher.clerk_user_id,
-    createdAt: new Date(teacher.created_at).toISOString(),
+    id: String(teacher.id ?? ''),
+    clerkUserId: String(teacher.clerk_user_id ?? ''),
+    createdAt: new Date(String(teacher.created_at ?? nowIso())).toISOString(),
   };
 }
 
@@ -143,13 +150,13 @@ async function classroomCodeExists(code: string) {
 
   await ensureTeacherTables();
   const sql = getNeonSql();
-  const rows = await sql<{ code: string }>`
+  const rows = await sql`
     SELECT code
     FROM stock_game_classrooms
     WHERE code = ${code}
     LIMIT 1
   `;
-  return rows.length > 0;
+  return toObjectRows(rows).length > 0;
 }
 
 async function generateUniqueClassroomCode() {
@@ -175,25 +182,19 @@ export async function listTeacherClassrooms(clerkUserId: string) {
 
   await ensureTeacherTables();
   const sql = getNeonSql();
-  const rows = await sql<{
-    id: string;
-    teacher_id: string;
-    code: string;
-    title: string;
-    created_at: string;
-  }>`
+  const rows = await sql`
     SELECT id, teacher_id, code, title, created_at
     FROM stock_game_classrooms
     WHERE teacher_id = ${teacher.id}
     ORDER BY created_at ASC
   `;
 
-  return rows.map((row) => ({
-    id: row.id,
-    teacherId: row.teacher_id,
-    code: row.code,
-    title: row.title,
-    createdAt: new Date(row.created_at).toISOString(),
+  return toObjectRows(rows).map((row) => ({
+    id: String(row.id ?? ''),
+    teacherId: String(row.teacher_id ?? ''),
+    code: String(row.code ?? ''),
+    title: String(row.title ?? ''),
+    createdAt: new Date(String(row.created_at ?? nowIso())).toISOString(),
   }));
 }
 
@@ -220,29 +221,23 @@ export async function createTeacherClassroom(
 
   await ensureTeacherTables();
   const sql = getNeonSql();
-  const rows = await sql<{
-    id: string;
-    teacher_id: string;
-    code: string;
-    title: string;
-    created_at: string;
-  }>`
+  const rows = await sql`
     INSERT INTO stock_game_classrooms (id, teacher_id, code, title)
     VALUES (${randomUUID()}, ${teacher.id}, ${code}, ${title})
     RETURNING id, teacher_id, code, title, created_at
   `;
 
-  const classroom = rows[0];
+  const classroom = toObjectRows(rows)[0];
   if (!classroom) {
     throw new Error('Unable to create classroom.');
   }
 
   return {
-    id: classroom.id,
-    teacherId: classroom.teacher_id,
-    code: classroom.code,
-    title: classroom.title,
-    createdAt: new Date(classroom.created_at).toISOString(),
+    id: String(classroom.id ?? ''),
+    teacherId: String(classroom.teacher_id ?? ''),
+    code: String(classroom.code ?? ''),
+    title: String(classroom.title ?? ''),
+    createdAt: new Date(String(classroom.created_at ?? nowIso())).toISOString(),
   };
 }
 
@@ -264,13 +259,7 @@ export async function assertTeacherOwnsClassroom(
 
   await ensureTeacherTables();
   const sql = getNeonSql();
-  const rows = await sql<{
-    id: string;
-    teacher_id: string;
-    code: string;
-    title: string;
-    created_at: string;
-  }>`
+  const rows = await sql`
     SELECT id, teacher_id, code, title, created_at
     FROM stock_game_classrooms
     WHERE code = ${classroomCode}
@@ -278,17 +267,17 @@ export async function assertTeacherOwnsClassroom(
     LIMIT 1
   `;
 
-  const classroom = rows[0];
+  const classroom = toObjectRows(rows)[0];
   if (!classroom) {
     throw new Error('Teacher does not own this classroom.');
   }
 
   return {
-    id: classroom.id,
-    teacherId: classroom.teacher_id,
-    code: classroom.code,
-    title: classroom.title,
-    createdAt: new Date(classroom.created_at).toISOString(),
+    id: String(classroom.id ?? ''),
+    teacherId: String(classroom.teacher_id ?? ''),
+    code: String(classroom.code ?? ''),
+    title: String(classroom.title ?? ''),
+    createdAt: new Date(String(classroom.created_at ?? nowIso())).toISOString(),
   };
 }
 

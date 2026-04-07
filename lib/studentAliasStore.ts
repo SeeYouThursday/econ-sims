@@ -168,7 +168,7 @@ export async function listStudentAliasesByClassroom(classroomCode: string) {
     ORDER BY username ASC
   `;
 
-  const rowArray = Array.isArray(rows) ? rows : [];
+  const rowArray: unknown[] = Array.isArray(rows) ? rows : [];
 
   return {
     aliases: rowArray

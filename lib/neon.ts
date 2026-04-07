@@ -25,16 +25,3 @@ export function getNeonSql() {
 
   return globalThis.__econSimsNeonSql;
 }
-
-// Planned usage: lightweight DB health probe for a future diagnostics/health
-// endpoint so we can verify Neon connectivity from the running app process.
-// export async function pingNeon() {
-//   const sql = getNeonSql();
-//   const result = await sql`SELECT 1 AS ok`;
-//   if (!Array.isArray(result)) {
-//     return false;
-//   }
-//
-//   const firstRow = result[0] as { ok?: unknown } | undefined;
-//   return firstRow?.ok === 1;
-// }
