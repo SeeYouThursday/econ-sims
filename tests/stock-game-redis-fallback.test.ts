@@ -14,6 +14,12 @@ describe('stock game Redis failure fallback', () => {
   it('falls back to in-memory state when Redis connect fails', async () => {
     vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'fake-token');
+    vi.stubEnv('POLYGON_API_KEY', 'test-key');
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [{ c: 100 }] }),
+    } as Response);
 
     vi.doMock('@/lib/redis', () => ({
       isRedisConfigured: () => true,

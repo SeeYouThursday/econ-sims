@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { getNeonSql, isNeonConfigured } from './neon';
 
 type TeacherRecord = {
@@ -12,16 +12,37 @@ type TeacherClassroomRecord = {
   teacherId: string;
   code: string;
   title: string;
+  startingCash: number;
+  createdAt: string;
+};
+
+type TeacherInvitationRecord = {
+  token: string;
+  usedByClerkUserId: string | null;
+  usedAt: string | null;
   createdAt: string;
 };
 
 type TeacherStoreState = {
   teachersByClerkUserId: Record<string, TeacherRecord>;
   classroomsByCode: Record<string, TeacherClassroomRecord>;
+  invitationsByToken: Record<string, TeacherInvitationRecord>;
 };
 
 declare global {
   var __econSimsTeacherStore: TeacherStoreState | undefined;
+}
+
+const INVITE_REQUIRED_MESSAGE =
+  'Teacher access requires an invitation. Please sign up using your invitation link.';
+
+export class TeacherAccessError extends Error {
+  status: number;
+
+  constructor(message = INVITE_REQUIRED_MESSAGE, status = 403) {
+    super(message);
+    this.status = status;
+  }
 }
 
 function nowIso() {
@@ -32,6 +53,7 @@ function createEmptyTeacherStore(): TeacherStoreState {
   return {
     teachersByClerkUserId: {},
     classroomsByCode: {},
+    invitationsByToken: {},
   };
 }
 
@@ -50,6 +72,21 @@ function validateClassroomTitle(title: string) {
   }
 
   return trimmed;
+}
+
+const DEFAULT_STARTING_CASH = 10000;
+
+function validateStartingCash(startingCash: unknown) {
+  const parsed =
+    typeof startingCash === 'number'
+      ? startingCash
+      : Number(startingCash ?? DEFAULT_STARTING_CASH);
+
+  if (!Number.isFinite(parsed) || parsed < 100 || parsed > 1_000_000) {
+    throw new Error('Starting cash must be between 100 and 1,000,000.');
+  }
+
+  return Math.trunc(parsed);
 }
 
 function normalizeClassroomCode(code: string) {
@@ -97,9 +134,34 @@ async function ensureTeacherTables() {
       teacher_id TEXT NOT NULL REFERENCES stock_game_teachers(id) ON DELETE CASCADE,
       code TEXT NOT NULL UNIQUE,
       title TEXT NOT NULL,
+      starting_cash INTEGER NOT NULL DEFAULT 10000,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+
+  await sql`
+    ALTER TABLE stock_game_classrooms
+    ADD COLUMN IF NOT EXISTS starting_cash INTEGER NOT NULL DEFAULT 10000
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS stock_game_teacher_invitations (
+      token TEXT PRIMARY KEY,
+      used_by_clerk_user_id TEXT NULL,
+      used_at TIMESTAMPTZ NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+}
+
+export async function requireTeacherRecord(
+  clerkUserId: string,
+): Promise<TeacherRecord> {
+  return getOrCreateTeacherRecord(clerkUserId);
+}
+
+export async function provisionTeacherRecord(clerkUserId: string) {
+  return getOrCreateTeacherRecord(clerkUserId);
 }
 
 async function getOrCreateTeacherRecord(
@@ -170,20 +232,130 @@ async function generateUniqueClassroomCode() {
   throw new Error('Unable to generate a unique classroom code.');
 }
 
+export async function createTeacherInvitation(): Promise<{ token: string }> {
+  const token = randomBytes(24).toString('hex');
+
+  if (!isNeonConfigured()) {
+    const store = getMemoryTeacherStore();
+    store.invitationsByToken[token] = {
+      token,
+      usedByClerkUserId: null,
+      usedAt: null,
+      createdAt: nowIso(),
+    };
+    return { token };
+  }
+
+  await ensureTeacherTables();
+  const sql = getNeonSql();
+  await sql`
+    INSERT INTO stock_game_teacher_invitations (token)
+    VALUES (${token})
+  `;
+  return { token };
+}
+
+export async function validateTeacherInvitation(
+  token: string,
+): Promise<{ valid: boolean; reason?: string }> {
+  if (!token || typeof token !== 'string') {
+    return { valid: false, reason: 'Invitation not found.' };
+  }
+
+  if (!isNeonConfigured()) {
+    const store = getMemoryTeacherStore();
+    const invitation = store.invitationsByToken[token];
+    if (!invitation) return { valid: false, reason: 'Invitation not found.' };
+    if (invitation.usedByClerkUserId)
+      return { valid: false, reason: 'This invitation has already been used.' };
+    return { valid: true };
+  }
+
+  await ensureTeacherTables();
+  const sql = getNeonSql();
+  const rows = await sql`
+    SELECT token, used_by_clerk_user_id
+    FROM stock_game_teacher_invitations
+    WHERE token = ${token}
+    LIMIT 1
+  `;
+
+  const row = toObjectRows(rows)[0];
+  if (!row) return { valid: false, reason: 'Invitation not found.' };
+  if (row.used_by_clerk_user_id)
+    return { valid: false, reason: 'This invitation has already been used.' };
+  return { valid: true };
+}
+
+export async function redeemTeacherInvitation(
+  token: string,
+  clerkUserId: string,
+): Promise<void> {
+  if (!token || typeof token !== 'string') {
+    throw new Error('Invalid invitation token.');
+  }
+
+  if (!isNeonConfigured()) {
+    const store = getMemoryTeacherStore();
+    const invitation = store.invitationsByToken[token];
+    if (!invitation) throw new Error('Invalid invitation token.');
+    if (
+      invitation.usedByClerkUserId &&
+      invitation.usedByClerkUserId !== clerkUserId
+    ) {
+      throw new Error('This invitation has already been used.');
+    }
+    invitation.usedByClerkUserId = clerkUserId;
+    invitation.usedAt = nowIso();
+    await getOrCreateTeacherRecord(clerkUserId);
+    return;
+  }
+
+  await ensureTeacherTables();
+  const sql = getNeonSql();
+  const updated = await sql`
+    UPDATE stock_game_teacher_invitations
+    SET used_by_clerk_user_id = ${clerkUserId},
+        used_at = NOW()
+    WHERE token = ${token}
+      AND (used_by_clerk_user_id IS NULL OR used_by_clerk_user_id = ${clerkUserId})
+    RETURNING token
+  `;
+
+  if (toObjectRows(updated).length === 0) {
+    const existing = await sql`
+      SELECT token
+      FROM stock_game_teacher_invitations
+      WHERE token = ${token}
+      LIMIT 1
+    `;
+    if (toObjectRows(existing).length === 0) {
+      throw new Error('Invalid invitation token.');
+    }
+    throw new Error('This invitation has already been used.');
+  }
+
+  await getOrCreateTeacherRecord(clerkUserId);
+}
+
 export async function listTeacherClassrooms(clerkUserId: string) {
-  const teacher = await getOrCreateTeacherRecord(clerkUserId);
+  const teacher = await requireTeacherRecord(clerkUserId);
 
   if (!isNeonConfigured()) {
     const store = getMemoryTeacherStore();
     return Object.values(store.classroomsByCode)
       .filter((classroom) => classroom.teacherId === teacher.id)
+      .map((classroom) => ({
+        ...classroom,
+        startingCash: validateStartingCash(classroom.startingCash),
+      }))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   await ensureTeacherTables();
   const sql = getNeonSql();
   const rows = await sql`
-    SELECT id, teacher_id, code, title, created_at
+    SELECT id, teacher_id, code, title, starting_cash, created_at
     FROM stock_game_classrooms
     WHERE teacher_id = ${teacher.id}
     ORDER BY created_at ASC
@@ -194,6 +366,7 @@ export async function listTeacherClassrooms(clerkUserId: string) {
     teacherId: String(row.teacher_id ?? ''),
     code: String(row.code ?? ''),
     title: String(row.title ?? ''),
+    startingCash: validateStartingCash(row.starting_cash),
     createdAt: new Date(String(row.created_at ?? nowIso())).toISOString(),
   }));
 }
@@ -201,9 +374,11 @@ export async function listTeacherClassrooms(clerkUserId: string) {
 export async function createTeacherClassroom(
   clerkUserId: string,
   titleInput: string,
+  startingCashInput?: unknown,
 ) {
-  const teacher = await getOrCreateTeacherRecord(clerkUserId);
+  const teacher = await requireTeacherRecord(clerkUserId);
   const title = validateClassroomTitle(titleInput);
+  const startingCash = validateStartingCash(startingCashInput);
   const code = await generateUniqueClassroomCode();
 
   if (!isNeonConfigured()) {
@@ -213,6 +388,7 @@ export async function createTeacherClassroom(
       teacherId: teacher.id,
       code,
       title,
+      startingCash,
       createdAt: nowIso(),
     };
     store.classroomsByCode[classroom.code] = classroom;
@@ -222,9 +398,9 @@ export async function createTeacherClassroom(
   await ensureTeacherTables();
   const sql = getNeonSql();
   const rows = await sql`
-    INSERT INTO stock_game_classrooms (id, teacher_id, code, title)
-    VALUES (${randomUUID()}, ${teacher.id}, ${code}, ${title})
-    RETURNING id, teacher_id, code, title, created_at
+    INSERT INTO stock_game_classrooms (id, teacher_id, code, title, starting_cash)
+    VALUES (${randomUUID()}, ${teacher.id}, ${code}, ${title}, ${startingCash})
+    RETURNING id, teacher_id, code, title, starting_cash, created_at
   `;
 
   const classroom = toObjectRows(rows)[0];
@@ -237,6 +413,7 @@ export async function createTeacherClassroom(
     teacherId: String(classroom.teacher_id ?? ''),
     code: String(classroom.code ?? ''),
     title: String(classroom.title ?? ''),
+    startingCash: validateStartingCash(classroom.starting_cash),
     createdAt: new Date(String(classroom.created_at ?? nowIso())).toISOString(),
   };
 }
@@ -245,7 +422,7 @@ export async function assertTeacherOwnsClassroom(
   clerkUserId: string,
   classroomCodeInput: string,
 ) {
-  const teacher = await getOrCreateTeacherRecord(clerkUserId);
+  const teacher = await requireTeacherRecord(clerkUserId);
   const classroomCode = normalizeClassroomCode(classroomCodeInput);
 
   if (!isNeonConfigured()) {
@@ -254,13 +431,14 @@ export async function assertTeacherOwnsClassroom(
     if (!classroom || classroom.teacherId !== teacher.id) {
       throw new Error('Teacher does not own this classroom.');
     }
+    classroom.startingCash = validateStartingCash(classroom.startingCash);
     return classroom;
   }
 
   await ensureTeacherTables();
   const sql = getNeonSql();
   const rows = await sql`
-    SELECT id, teacher_id, code, title, created_at
+    SELECT id, teacher_id, code, title, starting_cash, created_at
     FROM stock_game_classrooms
     WHERE code = ${classroomCode}
       AND teacher_id = ${teacher.id}
@@ -277,6 +455,52 @@ export async function assertTeacherOwnsClassroom(
     teacherId: String(classroom.teacher_id ?? ''),
     code: String(classroom.code ?? ''),
     title: String(classroom.title ?? ''),
+    startingCash: validateStartingCash(classroom.starting_cash),
+    createdAt: new Date(String(classroom.created_at ?? nowIso())).toISOString(),
+  };
+}
+
+export async function updateTeacherClassroomStartingCash(
+  clerkUserId: string,
+  classroomCodeInput: string,
+  startingCashInput: unknown,
+) {
+  const teacher = await requireTeacherRecord(clerkUserId);
+  const classroomCode = normalizeClassroomCode(classroomCodeInput);
+  const startingCash = validateStartingCash(startingCashInput);
+
+  if (!isNeonConfigured()) {
+    const store = getMemoryTeacherStore();
+    const classroom = store.classroomsByCode[classroomCode];
+    if (!classroom || classroom.teacherId !== teacher.id) {
+      throw new Error('Teacher does not own this classroom.');
+    }
+
+    classroom.startingCash = startingCash;
+    return classroom;
+  }
+
+  await ensureTeacherTables();
+  const sql = getNeonSql();
+  const rows = await sql`
+    UPDATE stock_game_classrooms
+    SET starting_cash = ${startingCash}
+    WHERE code = ${classroomCode}
+      AND teacher_id = ${teacher.id}
+    RETURNING id, teacher_id, code, title, starting_cash, created_at
+  `;
+
+  const classroom = toObjectRows(rows)[0];
+  if (!classroom) {
+    throw new Error('Teacher does not own this classroom.');
+  }
+
+  return {
+    id: String(classroom.id ?? ''),
+    teacherId: String(classroom.teacher_id ?? ''),
+    code: String(classroom.code ?? ''),
+    title: String(classroom.title ?? ''),
+    startingCash: validateStartingCash(classroom.starting_cash),
     createdAt: new Date(String(classroom.created_at ?? nowIso())).toISOString(),
   };
 }

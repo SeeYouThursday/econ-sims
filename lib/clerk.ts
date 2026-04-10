@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 
 export class TeacherAuthError extends Error {
   status: number;
@@ -24,6 +24,23 @@ export async function requireTeacherAuth() {
   const { userId } = await auth();
   if (!userId) {
     throw new TeacherAuthError('Teacher sign-in is required.', 401);
+  }
+
+  const client = await clerkClient();
+  const user = await client.users.getUser(userId);
+  const metadata =
+    user.publicMetadata && typeof user.publicMetadata === 'object'
+      ? (user.publicMetadata as Record<string, unknown>)
+      : null;
+
+  const isTeacherApproved =
+    metadata?.teacherApproved === true || metadata?.role === 'teacher';
+
+  if (!isTeacherApproved) {
+    throw new TeacherAuthError(
+      'Teacher approval is required before accessing this area.',
+      403,
+    );
   }
 
   return userId;

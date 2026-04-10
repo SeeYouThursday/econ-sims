@@ -36,6 +36,17 @@ describe('students route classroom resync', () => {
 
     vi.doMock('@clerk/nextjs/server', () => ({
       auth: vi.fn(async () => ({ userId: 'teacher_123' })),
+      clerkClient: vi.fn(async () => ({
+        users: {
+          getUser: vi.fn(async () => ({
+            id: 'teacher_123',
+            publicMetadata: {
+              role: 'teacher',
+              teacherApproved: true,
+            },
+          })),
+        },
+      })),
     }));
 
     vi.doMock('@/lib/teacherStore', () => ({
@@ -98,6 +109,17 @@ describe('students route classroom resync', () => {
 
     vi.doMock('@clerk/nextjs/server', () => ({
       auth: vi.fn(async () => ({ userId: 'teacher_123' })),
+      clerkClient: vi.fn(async () => ({
+        users: {
+          getUser: vi.fn(async () => ({
+            id: 'teacher_123',
+            publicMetadata: {
+              role: 'teacher',
+              teacherApproved: true,
+            },
+          })),
+        },
+      })),
     }));
 
     vi.doMock('@/lib/teacherStore', () => ({
@@ -162,6 +184,17 @@ describe('students route classroom resync', () => {
 
     vi.doMock('@clerk/nextjs/server', () => ({
       auth: vi.fn(async () => ({ userId: 'teacher_123' })),
+      clerkClient: vi.fn(async () => ({
+        users: {
+          getUser: vi.fn(async () => ({
+            id: 'teacher_123',
+            publicMetadata: {
+              role: 'teacher',
+              teacherApproved: true,
+            },
+          })),
+        },
+      })),
     }));
 
     vi.doMock('@/lib/teacherStore', () => ({
@@ -216,6 +249,17 @@ describe('students route classroom resync', () => {
 
     vi.doMock('@clerk/nextjs/server', () => ({
       auth: vi.fn(async () => ({ userId: 'teacher_123' })),
+      clerkClient: vi.fn(async () => ({
+        users: {
+          getUser: vi.fn(async () => ({
+            id: 'teacher_123',
+            publicMetadata: {
+              role: 'teacher',
+              teacherApproved: true,
+            },
+          })),
+        },
+      })),
     }));
 
     vi.doMock('@/lib/teacherStore', () => ({
@@ -314,6 +358,17 @@ describe('students route classroom resync', () => {
 
     vi.doMock('@clerk/nextjs/server', () => ({
       auth: vi.fn(async () => ({ userId: 'teacher_123' })),
+      clerkClient: vi.fn(async () => ({
+        users: {
+          getUser: vi.fn(async () => ({
+            id: 'teacher_123',
+            publicMetadata: {
+              role: 'teacher',
+              teacherApproved: true,
+            },
+          })),
+        },
+      })),
     }));
 
     vi.doMock('@/lib/teacherStore', () => ({

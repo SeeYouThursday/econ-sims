@@ -1,42 +1,28 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-
-type TeacherClassroom = {
-  code: string;
-  title: string;
-  createdAt: string;
-};
-
-type ClassroomApiError = {
-  error?: string;
-};
-
-type ClassroomStudent = {
-  studentId: string;
-  username: string;
-  createdAt: string;
-  isActive: boolean;
-  cash: number;
-  holdingsValue: number;
-  totalValue: number;
-  hasActiveSession: boolean;
-};
-
-type ClassroomStudentListPayload = {
-  students?: ClassroomStudent[];
-};
-
-type ClassroomAudit = {
-  classroomCode: string;
-  asOf: string;
-  studentCount: number;
-  activeSessionCount: number;
-  tradeCount: number;
-  buyCount: number;
-  sellCount: number;
-  topSymbols: Array<{ symbol: string; trades: number }>;
-};
+import {
+  generateStudentAlias,
+  generateStudentPasscode,
+} from '@/lib/studentAliasGenerator';
+import {
+  toCredentialsCsv,
+  type GeneratedCredential,
+  writeAndPrintCredentialCards,
+} from '@/lib/teacherCredentialExports';
+import { ClassroomListCard } from '@/components/teacher-dashboard/ClassroomListCard';
+import { ClassroomMetricsCard } from '@/components/teacher-dashboard/ClassroomMetricsCard';
+import { ConfirmDialog } from '@/components/teacher-dashboard/ConfirmDialog';
+import { CreateClassroomCard } from '@/components/teacher-dashboard/CreateClassroomCard';
+import { ManageStudentsPanel } from '@/components/teacher-dashboard/ManageStudentsPanel';
+import type {
+  ClassroomApiError,
+  ClassroomAudit,
+  ClassroomStudent,
+  ClassroomStudentListPayload,
+  ConfirmDialogState,
+  TeacherClassroom,
+} from '@/components/teacher-dashboard/types';
 
 function isTeacherClassroom(value: unknown): value is TeacherClassroom {
   if (!value || typeof value !== 'object') {
@@ -47,6 +33,7 @@ function isTeacherClassroom(value: unknown): value is TeacherClassroom {
   return (
     typeof candidate.code === 'string' &&
     typeof candidate.title === 'string' &&
+    typeof candidate.startingCash === 'number' &&
     typeof candidate.createdAt === 'string'
   );
 }
@@ -70,8 +57,12 @@ export default function TeacherDashboardPanel({
   const [selectedClassroomCode, setSelectedClassroomCode] = useState(
     initialClassrooms[0]?.code ?? '',
   );
-  const [studentAlias, setStudentAlias] = useState('');
-  const [studentPasscode, setStudentPasscode] = useState('');
+  const [studentAlias, setStudentAlias] = useState(() =>
+    generateStudentAlias(),
+  );
+  const [studentPasscode, setStudentPasscode] = useState(() =>
+    generateStudentPasscode(),
+  );
   const [studentsByClass, setStudentsByClass] = useState<
     Record<string, ClassroomStudent[]>
   >({});
@@ -83,12 +74,29 @@ export default function TeacherDashboardPanel({
   const [studentActionKey, setStudentActionKey] = useState<string | null>(null);
   const [creatingClassroom, setCreatingClassroom] = useState(false);
   const [creatingStudent, setCreatingStudent] = useState(false);
+  const [bulkCount, setBulkCount] = useState('23');
+  const [bulkCreating, setBulkCreating] = useState(false);
+  const [exportingCredentials, setExportingCredentials] = useState(false);
+  const [updatingClassroomSettings, setUpdatingClassroomSettings] =
+    useState(false);
+  const [newClassStartingCash, setNewClassStartingCash] = useState('10000');
+  const [selectedStartingCash, setSelectedStartingCash] = useState('10000');
+  const [showGeneratedPasscode, setShowGeneratedPasscode] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [studentMessage, setStudentMessage] = useState<string | null>(null);
+  const [manageTab, setManageTab] = useState<'single' | 'bulk' | 'roster'>(
+    'single',
+  );
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(
+    null,
+  );
 
   const selectedClassroomStudents = selectedClassroomCode
     ? (studentsByClass[selectedClassroomCode] ?? [])
     : [];
+  const selectedClassroom = classrooms.find(
+    (classroom) => classroom.code === selectedClassroomCode,
+  );
   const selectedClassroomAudit = selectedClassroomCode
     ? auditByClass[selectedClassroomCode]
     : undefined;
@@ -190,9 +198,27 @@ export default function TeacherDashboardPanel({
     void loadClassroomAudit(selectedClassroomCode);
   }, [loadClassroomAudit, loadClassroomRoster, selectedClassroomCode]);
 
+  useEffect(() => {
+    if (!selectedClassroom) {
+      return;
+    }
+
+    setSelectedStartingCash(String(selectedClassroom.startingCash ?? 10000));
+  }, [selectedClassroom]);
+
   const createClassroom = async () => {
     if (!title.trim()) {
       setError('Enter a classroom title.');
+      return;
+    }
+
+    const parsedStartingCash = Math.trunc(Number(newClassStartingCash));
+    if (
+      !Number.isFinite(parsedStartingCash) ||
+      parsedStartingCash < 100 ||
+      parsedStartingCash > 1_000_000
+    ) {
+      setError('Starting cash must be between 100 and 1,000,000.');
       return;
     }
 
@@ -203,7 +229,7 @@ export default function TeacherDashboardPanel({
       const response = await fetch('/api/teacher/classrooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, startingCash: parsedStartingCash }),
       });
 
       const payload = (await response.json().catch(() => null)) as unknown;
@@ -235,10 +261,68 @@ export default function TeacherDashboardPanel({
         },
       }));
       setTitle('');
+      setNewClassStartingCash('10000');
     } catch {
       setError('Unable to create classroom right now.');
     } finally {
       setCreatingClassroom(false);
+    }
+  };
+
+  const updateSelectedClassroomStartingCash = async () => {
+    if (!selectedClassroomCode) {
+      setError('Select a classroom first.');
+      return;
+    }
+
+    const parsedStartingCash = Math.trunc(Number(selectedStartingCash));
+    if (
+      !Number.isFinite(parsedStartingCash) ||
+      parsedStartingCash < 100 ||
+      parsedStartingCash > 1_000_000
+    ) {
+      setError('Starting cash must be between 100 and 1,000,000.');
+      return;
+    }
+
+    setUpdatingClassroomSettings(true);
+    setError(null);
+    setStudentMessage(null);
+
+    try {
+      const response = await fetch('/api/teacher/classrooms', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          classroomCode: selectedClassroomCode,
+          startingCash: parsedStartingCash,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as unknown;
+
+      if (!response.ok) {
+        setError(
+          getApiErrorMessage(payload) ?? 'Unable to update classroom settings.',
+        );
+        return;
+      }
+
+      if (!isTeacherClassroom(payload)) {
+        setError('Unexpected classroom response from server.');
+        return;
+      }
+
+      setClassrooms((current) =>
+        current.map((classroom) =>
+          classroom.code === payload.code ? payload : classroom,
+        ),
+      );
+      setSelectedStartingCash(String(payload.startingCash));
+      setStudentMessage(`Updated starting cash for ${payload.code}.`);
+    } catch {
+      setError('Unable to update classroom settings right now.');
+    } finally {
+      setUpdatingClassroomSettings(false);
     }
   };
 
@@ -248,10 +332,7 @@ export default function TeacherDashboardPanel({
       return;
     }
 
-    if (!studentAlias.trim()) {
-      setError('Enter a student alias.');
-      return;
-    }
+    const aliasToCreate = studentAlias.trim() || generateStudentAlias();
 
     if (!studentPasscode.trim()) {
       setError('Enter a student passcode.');
@@ -268,7 +349,7 @@ export default function TeacherDashboardPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           classroomCode: selectedClassroomCode,
-          username: studentAlias,
+          username: aliasToCreate,
           studentPasscode,
         }),
       });
@@ -282,8 +363,8 @@ export default function TeacherDashboardPanel({
 
       await loadClassroomRoster(selectedClassroomCode);
       await loadClassroomAudit(selectedClassroomCode);
-      setStudentAlias('');
-      setStudentPasscode('');
+      setStudentAlias(generateStudentAlias());
+      setStudentPasscode(generateStudentPasscode());
       setStudentMessage(
         'Student alias created. Share alias, passcode, and class code.',
       );
@@ -294,21 +375,37 @@ export default function TeacherDashboardPanel({
     }
   };
 
+  const fillGeneratedAlias = () => {
+    setStudentAlias(generateStudentAlias());
+    setError(null);
+  };
+
+  const fillGeneratedPasscode = () => {
+    setStudentPasscode(generateStudentPasscode());
+    setShowGeneratedPasscode(true);
+    setError(null);
+  };
+
   const runStudentAction = async (
     username: string,
     action: 'reset' | 'deactivate' | 'activate' | 'delete',
+    skipConfirm = false,
   ) => {
     if (!selectedClassroomCode) {
       setError('Select a classroom first.');
       return;
     }
 
-    if (
-      action === 'delete' &&
-      !window.confirm(
-        `Delete ${username}? This will remove the alias and cannot be undone.`,
-      )
-    ) {
+    if (action === 'delete' && !skipConfirm) {
+      setConfirmDialog({
+        title: 'Delete Student?',
+        message: `Delete ${username}? This will remove the alias and cannot be undone.`,
+        confirmLabel: 'Delete',
+        tone: 'danger',
+        onConfirm: () => {
+          void runStudentAction(username, action, true);
+        },
+      });
       return;
     }
 
@@ -351,320 +448,489 @@ export default function TeacherDashboardPanel({
     }
   };
 
+  const resetAllStudentsToStartingCash = async (skipConfirm = false) => {
+    if (!selectedClassroomCode) {
+      setError('Select a classroom first.');
+      return;
+    }
+
+    if (!skipConfirm) {
+      setConfirmDialog({
+        title: 'Reset Entire Class?',
+        message:
+          'This will reset every student portfolio in this class to the current starting cash and clear open sessions/trade history.',
+        confirmLabel: 'Reset All',
+        tone: 'danger',
+        onConfirm: () => {
+          void resetAllStudentsToStartingCash(true);
+        },
+      });
+      return;
+    }
+
+    setStudentActionKey(`${selectedClassroomCode}:reset-all`);
+    setError(null);
+    setStudentMessage(null);
+
+    try {
+      const response = await fetch('/api/stock-game/students', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          classroomCode: selectedClassroomCode,
+          action: 'reset-all',
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as unknown;
+
+      if (!response.ok) {
+        setError(
+          getApiErrorMessage(payload) ?? 'Unable to reset the classroom.',
+        );
+        return;
+      }
+
+      await loadClassroomRoster(selectedClassroomCode);
+      await loadClassroomAudit(selectedClassroomCode);
+      setStudentMessage('Reset all student portfolios for this classroom.');
+    } catch {
+      setError('Unable to reset the classroom right now.');
+    } finally {
+      setStudentActionKey(null);
+    }
+  };
+
+  const exportStudentCredentials = async (skipConfirm = false) => {
+    if (!selectedClassroomCode) {
+      setError('Select a classroom first.');
+      return;
+    }
+
+    if (!skipConfirm) {
+      setConfirmDialog({
+        title: 'Export Credentials CSV?',
+        message:
+          'This file contains sensitive credentials. Store it securely and delete it when done.',
+        confirmLabel: 'Export CSV',
+        onConfirm: () => {
+          void exportStudentCredentials(true);
+        },
+      });
+      return;
+    }
+
+    setExportingCredentials(true);
+    setError(null);
+    setStudentMessage(null);
+
+    try {
+      const params = new URLSearchParams({
+        classroomCode: selectedClassroomCode,
+        format: 'csv',
+      });
+      const response = await fetch(`/api/stock-game/students?${params}`);
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as unknown;
+        setError(
+          getApiErrorMessage(payload) ??
+            'Unable to export student credentials.',
+        );
+        return;
+      }
+
+      const csv = await response.text();
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `${selectedClassroomCode.toLowerCase()}-student-credentials-${dateStamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      setStudentMessage(
+        'Export complete. Keep the CSV secure and delete it after use.',
+      );
+    } catch {
+      setError('Unable to export student credentials right now.');
+    } finally {
+      setExportingCredentials(false);
+    }
+  };
+
+  const parseCredentialCsv = (csv: string): GeneratedCredential[] => {
+    const rows = csv
+      .split(/\r?\n/)
+      .map((row) => row.trim())
+      .filter(Boolean);
+
+    if (rows.length < 2) {
+      return [];
+    }
+
+    const [header, ...dataRows] = rows;
+    const columns = header.split(',');
+    const aliasIndex = columns.indexOf('alias');
+    const passcodeIndex = columns.indexOf('passcode');
+
+    if (aliasIndex === -1 || passcodeIndex === -1) {
+      return [];
+    }
+
+    return dataRows
+      .map((row) => {
+        const cells = row.split(',');
+        const alias = cells[aliasIndex]?.trim() ?? '';
+        const passcode = cells[passcodeIndex]?.trim() ?? '';
+        return {
+          alias,
+          passcode,
+        };
+      })
+      .filter((entry) => entry.alias.length > 0 && entry.passcode.length > 0);
+  };
+
+  const printRosterCredentialCards = async (skipConfirm = false) => {
+    if (!selectedClassroomCode) {
+      setError('Select a classroom first.');
+      return;
+    }
+
+    if (!skipConfirm) {
+      setConfirmDialog({
+        title: 'Print Roster Cards?',
+        message:
+          'This includes sensitive credentials. Collect and store printed pages securely.',
+        confirmLabel: 'Print Cards',
+        onConfirm: () => {
+          void printRosterCredentialCards(true);
+        },
+      });
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      setError(
+        'Unable to open print preview. Please retry and ensure this browser allows opening new windows from this page.',
+      );
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(
+      '<!doctype html><html><head><title>Preparing cards...</title></head><body><p style="font-family: Arial, sans-serif; padding: 16px;">Preparing student credential cards...</p></body></html>',
+    );
+    printWindow.document.close();
+
+    setExportingCredentials(true);
+    setError(null);
+    setStudentMessage(null);
+
+    try {
+      const params = new URLSearchParams({
+        classroomCode: selectedClassroomCode,
+        format: 'csv',
+      });
+      const response = await fetch(`/api/stock-game/students?${params}`);
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as unknown;
+        throw new Error(
+          getApiErrorMessage(payload) ?? 'Unable to load student credentials.',
+        );
+      }
+
+      const csv = await response.text();
+      const credentials = parseCredentialCsv(csv);
+
+      if (credentials.length === 0) {
+        printWindow.close();
+        setStudentMessage(
+          'No printable credentials are available for this classroom yet.',
+        );
+        return;
+      }
+
+      printCredentialCards(selectedClassroomCode, credentials, printWindow);
+      setStudentMessage(
+        'Print preview ready. Collect cards and store them securely.',
+      );
+    } catch (nextError) {
+      printWindow.close();
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Unable to print student credentials right now.',
+      );
+    } finally {
+      setExportingCredentials(false);
+    }
+  };
+
+  const downloadCredentialsCsv = (
+    classroomCode: string,
+    credentials: GeneratedCredential[],
+  ) => {
+    const csv = toCredentialsCsv(classroomCode, credentials);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `${classroomCode.toLowerCase()}-new-student-credentials-${dateStamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const printCredentialCards = (
+    classroomCode: string,
+    credentials: GeneratedCredential[],
+    popup: Window,
+  ) => {
+    writeAndPrintCredentialCards(popup, classroomCode, credentials);
+  };
+
+  const bulkCreateStudents = async (
+    output: 'csv' | 'cards',
+    skipConfirm = false,
+  ) => {
+    if (!selectedClassroomCode) {
+      setError('Select a classroom first.');
+      return;
+    }
+
+    const count = Math.trunc(Number(bulkCount));
+    if (!Number.isFinite(count) || count < 1 || count > 35) {
+      setError('Enter a class size between 1 and 35.');
+      return;
+    }
+
+    if (!skipConfirm) {
+      setConfirmDialog({
+        title: 'Generate Student Credentials?',
+        message: `Generate ${count} student aliases/passcodes for ${selectedClassroomCode}?`,
+        confirmLabel: output === 'csv' ? 'Create + CSV' : 'Create + Print',
+        onConfirm: () => {
+          void bulkCreateStudents(output, true);
+        },
+      });
+      return;
+    }
+
+    const printWindow = output === 'cards' ? window.open('', '_blank') : null;
+    if (output === 'cards' && !printWindow) {
+      setError(
+        'Unable to open print preview. Please retry and ensure this browser allows opening new windows from this page.',
+      );
+      return;
+    }
+
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.write(
+        '<!doctype html><html><head><title>Preparing cards...</title></head><body><p style="font-family: Arial, sans-serif; padding: 16px;">Preparing student credential cards...</p></body></html>',
+      );
+      printWindow.document.close();
+    }
+
+    setBulkCreating(true);
+    setError(null);
+    setStudentMessage(null);
+
+    try {
+      let created: GeneratedCredential[] = [];
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const batch: GeneratedCredential[] = [];
+        const seenAliases = new Set<string>();
+
+        while (batch.length < count) {
+          const alias = generateStudentAlias();
+          if (seenAliases.has(alias)) {
+            continue;
+          }
+
+          batch.push({ alias, passcode: generateStudentPasscode() });
+          seenAliases.add(alias);
+        }
+
+        const response = await fetch('/api/stock-game/students', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            classroomCode: selectedClassroomCode,
+            students: batch.map((entry) => ({
+              username: entry.alias,
+              studentPasscode: entry.passcode,
+            })),
+          }),
+        });
+
+        if (response.ok) {
+          created = batch;
+          break;
+        }
+
+        const payload = (await response.json().catch(() => null)) as unknown;
+        const message =
+          getApiErrorMessage(payload) ??
+          'Unable to bulk create student credentials.';
+        if (response.status === 409) {
+          continue;
+        }
+
+        throw new Error(message);
+      }
+
+      if (created.length !== count) {
+        throw new Error(
+          'Could not generate a unique class set after several attempts. Try again.',
+        );
+      }
+
+      await loadClassroomRoster(selectedClassroomCode);
+      await loadClassroomAudit(selectedClassroomCode);
+
+      if (output === 'csv') {
+        downloadCredentialsCsv(selectedClassroomCode, created);
+      } else {
+        printCredentialCards(
+          selectedClassroomCode,
+          created,
+          printWindow as Window,
+        );
+      }
+
+      setStudentAlias(generateStudentAlias());
+      setStudentPasscode(generateStudentPasscode());
+      setShowGeneratedPasscode(true);
+      setStudentMessage(
+        `Generated ${created.length} student credentials successfully.`,
+      );
+    } catch (nextError) {
+      if (printWindow) {
+        printWindow.close();
+      }
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Unable to bulk generate student credentials right now.',
+      );
+    } finally {
+      setBulkCreating(false);
+    }
+  };
+
   return (
-    <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <div className="rounded-4xl border border-slate-200 bg-slate-50 p-6">
-        <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-500">
-          Your classrooms
+    <div className="mt-8 space-y-6">
+      {/* Top row: Classrooms and Create Classroom */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+        <ClassroomListCard
+          classrooms={classrooms}
+          selectedClassroomCode={selectedClassroomCode}
+          onSelectClassroom={(classroomCode) => {
+            setError(null);
+            setStudentMessage(null);
+            setSelectedClassroomCode(classroomCode);
+          }}
+        />
+
+        <CreateClassroomCard
+          title={title}
+          newClassStartingCash={newClassStartingCash}
+          creatingClassroom={creatingClassroom}
+          onTitleChange={setTitle}
+          onStartingCashChange={setNewClassStartingCash}
+          onCreateClassroom={() => {
+            void createClassroom();
+          }}
+        />
+      </div>
+
+      {/* Metrics Row */}
+      {selectedClassroomCode && (
+        <ClassroomMetricsCard
+          selectedStartingCash={selectedStartingCash}
+          selectedClassroomStudents={selectedClassroomStudents}
+          selectedClassroomAudit={selectedClassroomAudit}
+          loadingMetrics={loadingMetrics}
+          updatingClassroomSettings={updatingClassroomSettings}
+          studentActionKey={studentActionKey}
+          onSelectedStartingCashChange={setSelectedStartingCash}
+          onSaveStartingCash={() => {
+            void updateSelectedClassroomStartingCash();
+          }}
+          onRefreshMetrics={() => {
+            void loadClassroomAudit(selectedClassroomCode);
+          }}
+          onResetAll={() => {
+            void resetAllStudentsToStartingCash();
+          }}
+        />
+      )}
+
+      {/* Manage Students Section with Tabs */}
+      {selectedClassroomCode && (
+        <ManageStudentsPanel
+          selectedClassroomStudents={selectedClassroomStudents}
+          manageTab={manageTab}
+          studentAlias={studentAlias}
+          studentPasscode={studentPasscode}
+          showGeneratedPasscode={showGeneratedPasscode}
+          bulkCount={bulkCount}
+          loadingRoster={loadingRoster}
+          creatingStudent={creatingStudent}
+          bulkCreating={bulkCreating}
+          exportingCredentials={exportingCredentials}
+          studentActionKey={studentActionKey}
+          studentMessage={studentMessage}
+          onManageTabChange={setManageTab}
+          onStudentPasscodeChange={setStudentPasscode}
+          onBulkCountChange={setBulkCount}
+          onFillGeneratedAlias={fillGeneratedAlias}
+          onTogglePasscodeVisibility={() => {
+            setShowGeneratedPasscode((current) => !current);
+          }}
+          onFillGeneratedPasscode={fillGeneratedPasscode}
+          onCreateStudentAlias={() => {
+            void createStudentAlias();
+          }}
+          onBulkCreateCsv={() => {
+            void bulkCreateStudents('csv');
+          }}
+          onBulkCreateCards={() => {
+            void bulkCreateStudents('cards');
+          }}
+          onExportStudentCredentials={() => {
+            void exportStudentCredentials();
+          }}
+          onPrintRosterCredentialCards={() => {
+            void printRosterCredentialCards();
+          }}
+          onRunStudentAction={(username, action) => {
+            void runStudentAction(username, action);
+          }}
+        />
+      )}
+
+      {error && (
+        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+          {error}
         </p>
-        {classrooms.length === 0 ? (
-          <p className="mt-4 text-sm leading-7 text-slate-600">
-            No classrooms yet. Create your first classroom to start assigning
-            student aliases without shared global credentials.
-          </p>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {classrooms.map((classroom) => (
-              <div
-                key={classroom.code}
-                className="rounded-3xl border border-slate-200 bg-white px-4 py-4"
-              >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-black text-slate-900">
-                      {classroom.title}
-                    </p>
-                    <p className="mt-1 text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
-                      Code {classroom.code}
-                    </p>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Created {new Date(classroom.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
-      <div className="space-y-6">
-        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-500">
-            Create classroom
-          </p>
-          <label className="mt-4 block text-sm font-semibold text-slate-700">
-            Classroom title
-          </label>
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="Period 3 Economics"
-            className="mt-2 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-500"
-          />
-          <button
-            type="button"
-            onClick={createClassroom}
-            disabled={creatingClassroom}
-            className="mt-4 w-full rounded-3xl bg-slate-900 px-4 py-3 text-sm font-black uppercase tracking-[0.2em] text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-500"
-          >
-            {creatingClassroom ? 'Creating…' : 'Create classroom'}
-          </button>
-        </div>
-
-        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-500">
-              Classroom metrics
-            </p>
-            {selectedClassroomCode ? (
-              <button
-                type="button"
-                onClick={() => void loadClassroomAudit(selectedClassroomCode)}
-                disabled={loadingMetrics}
-                title={
-                  loadingMetrics
-                    ? 'Refreshing metrics...'
-                    : 'Refresh classroom metrics'
-                }
-                className="rounded-full border border-slate-300 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loadingMetrics ? 'Refreshing…' : 'Refresh'}
-              </button>
-            ) : null}
-          </div>
-
-          {!selectedClassroomCode ? (
-            <p className="mt-3 text-sm text-slate-600">
-              Select a classroom to view metrics.
-            </p>
-          ) : loadingMetrics && !selectedClassroomAudit ? (
-            <p className="mt-3 text-sm text-slate-600">Loading metrics…</p>
-          ) : selectedClassroomAudit ? (
-            <div className="mt-4">
-              <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-slate-500">Students</p>
-                  <p className="mt-1 font-semibold text-slate-900">
-                    {selectedClassroomAudit.studentCount}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-slate-500">Active sessions</p>
-                  <p className="mt-1 font-semibold text-slate-900">
-                    {selectedClassroomAudit.activeSessionCount}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-slate-500">Trades</p>
-                  <p className="mt-1 font-semibold text-slate-900">
-                    {selectedClassroomAudit.tradeCount}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-slate-500">Buys</p>
-                  <p className="mt-1 font-semibold text-slate-900">
-                    {selectedClassroomAudit.buyCount}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-slate-500">Sells</p>
-                  <p className="mt-1 font-semibold text-slate-900">
-                    {selectedClassroomAudit.sellCount}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
-                <p className="font-semibold text-slate-700">Top symbols</p>
-                {selectedClassroomAudit.topSymbols.length === 0 ? (
-                  <p className="mt-1 text-slate-500">No trade activity yet.</p>
-                ) : (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedClassroomAudit.topSymbols.map((entry) => (
-                      <span
-                        key={`${entry.symbol}:${entry.trades}`}
-                        className="rounded-full border border-slate-300 bg-white px-2 py-1 font-semibold text-slate-700"
-                      >
-                        {entry.symbol} · {entry.trades}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <p className="mt-2 text-[11px] text-slate-500">
-                Updated {new Date(selectedClassroomAudit.asOf).toLocaleString()}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-600">
-              Metrics are unavailable for this classroom right now.
-            </p>
-          )}
-        </div>
-
-        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-500">
-            Add students
-          </p>
-          <label className="mt-4 block text-sm font-semibold text-slate-700">
-            Classroom code
-          </label>
-          <select
-            title="Classroom code"
-            aria-label="Classroom code"
-            value={selectedClassroomCode}
-            onChange={(event) => setSelectedClassroomCode(event.target.value)}
-            className="mt-2 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-500"
-          >
-            <option value="">Select classroom</option>
-            {classrooms.map((classroom) => (
-              <option key={classroom.code} value={classroom.code}>
-                {classroom.title} ({classroom.code})
-              </option>
-            ))}
-          </select>
-
-          <label className="mt-4 block text-sm font-semibold text-slate-700">
-            Student alias
-          </label>
-          <input
-            value={studentAlias}
-            onChange={(event) => setStudentAlias(event.target.value)}
-            placeholder="student_01"
-            className="mt-2 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-500"
-          />
-
-          <label className="mt-4 block text-sm font-semibold text-slate-700">
-            Student passcode
-          </label>
-          <input
-            type="password"
-            value={studentPasscode}
-            onChange={(event) => setStudentPasscode(event.target.value)}
-            placeholder="••••••"
-            className="mt-2 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-500"
-          />
-
-          <button
-            type="button"
-            onClick={createStudentAlias}
-            disabled={creatingStudent}
-            className="mt-4 w-full rounded-3xl bg-slate-900 px-4 py-3 text-sm font-black uppercase tracking-[0.2em] text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-500"
-          >
-            {creatingStudent ? 'Creating…' : 'Create student alias'}
-          </button>
-
-          {studentMessage ? (
-            <p className="mt-3 text-sm text-emerald-700">{studentMessage}</p>
-          ) : null}
-          {selectedClassroomCode ? (
-            <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
-                Classroom roster
-              </p>
-              {loadingRoster ? (
-                <p className="mt-2 text-sm text-slate-600">Loading roster…</p>
-              ) : selectedClassroomStudents.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-600">
-                  No students yet for this classroom.
-                </p>
-              ) : (
-                <div className="mt-2 space-y-2">
-                  {selectedClassroomStudents.map((student) => (
-                    <div
-                      key={student.studentId}
-                      className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-slate-800">
-                            {student.username}
-                          </p>
-                          <p className="text-slate-500">
-                            Joined{' '}
-                            {new Date(student.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-slate-800">
-                            ${student.totalValue.toFixed(2)}
-                          </p>
-                          <p className="text-slate-500">
-                            {student.isActive
-                              ? student.hasActiveSession
-                                ? 'Active now'
-                                : 'Active'
-                              : 'Disabled'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {/** Provide a reason in native tooltip text while actions are locked. */}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void runStudentAction(student.username, 'reset')
-                          }
-                          disabled={studentActionKey !== null}
-                          title={
-                            studentActionKey !== null
-                              ? 'Finish the current student action first.'
-                              : `Reset portfolio for ${student.username}`
-                          }
-                          className="rounded-full border border-slate-300 px-2.5 py-1 font-semibold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Reset
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void runStudentAction(
-                              student.username,
-                              student.isActive ? 'deactivate' : 'activate',
-                            )
-                          }
-                          disabled={studentActionKey !== null}
-                          title={
-                            studentActionKey !== null
-                              ? 'Finish the current student action first.'
-                              : student.isActive
-                                ? `Deactivate ${student.username}`
-                                : `Reactivate ${student.username}`
-                          }
-                          className="rounded-full border border-slate-300 px-2.5 py-1 font-semibold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {student.isActive ? 'Deactivate' : 'Reactivate'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void runStudentAction(student.username, 'delete')
-                          }
-                          disabled={studentActionKey !== null}
-                          title={
-                            studentActionKey !== null
-                              ? 'Finish the current student action first.'
-                              : `Delete ${student.username}`
-                          }
-                          className="rounded-full border border-rose-300 px-2.5 py-1 font-semibold text-rose-700 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {error ? (
-        <p className="lg:col-span-2 text-sm text-rose-700">{error}</p>
-      ) : null}
+      {confirmDialog && (
+        <ConfirmDialog
+          dialog={confirmDialog}
+          onClose={() => setConfirmDialog(null)}
+        />
+      )}
     </div>
   );
 }

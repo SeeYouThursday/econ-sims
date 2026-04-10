@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  fetchTradeHistory,
   fetchLeaderboard,
   fetchPortfolio,
+  fetchTradeQuote,
   submitTrade,
 } from '../components/student-game/api';
 
@@ -21,6 +23,8 @@ describe('student-game api client', () => {
         positions: { AAPL: 10 },
         holdingsValue: 1000,
         totalValue: 10000,
+        pnlValue: 0,
+        pnlPercent: 0,
       }),
     } as Response);
 
@@ -57,6 +61,8 @@ describe('student-game api client', () => {
       ok: true,
       json: async () => ({
         latestPrice: 100,
+        quoteAsOf: '2026-04-07',
+        executedAt: '2026-04-07T12:00:00.000Z',
         storage: 'memory',
         portfolio: {
           studentId: 'student_1',
@@ -66,6 +72,8 @@ describe('student-game api client', () => {
           positions: { AAPL: 10 },
           holdingsValue: 1000,
           totalValue: 10000,
+          pnlValue: 0,
+          pnlPercent: 0,
         },
       }),
     } as Response);
@@ -80,10 +88,10 @@ describe('student-game api client', () => {
       symbol: 'AAPL',
       side: 'buy',
       shares: 10,
-      price: 100,
     });
 
     expect(result.latestPrice).toBe(100);
+    expect(result.quoteAsOf).toBe('2026-04-07');
     expect(result.portfolio.positions.AAPL).toBe(10);
   });
 
@@ -104,8 +112,77 @@ describe('student-game api client', () => {
         symbol: 'AAPL',
         side: 'buy',
         shares: 1000,
-        price: 100,
       }),
     ).rejects.toThrow('Insufficient cash to place buy order.');
+  });
+
+  it('fetchTradeQuote returns latest candle close as quote', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        symbol: 'AAPL',
+        candles: [
+          { date: '2026-04-04', close: 201.14 },
+          { date: '2026-04-07', close: 205.32 },
+        ],
+      }),
+    } as Response);
+
+    const result = await fetchTradeQuote('aapl');
+
+    expect(result.symbol).toBe('AAPL');
+    expect(result.latestPrice).toBe(205.32);
+    expect(result.asOf).toBe('2026-04-07');
+  });
+
+  it('fetchTradeQuote throws when no valid candle data is returned', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        symbol: 'AAPL',
+        candles: [],
+      }),
+    } as Response);
+
+    await expect(fetchTradeQuote('AAPL')).rejects.toThrow(
+      'Unable to load stock quote.',
+    );
+  });
+
+  it('fetchTradeHistory returns parsed trade history', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        classroomCode: 'ABC123',
+        username: 'student_01',
+        asOf: '2026-04-07T12:00:00.000Z',
+        trades: [
+          {
+            id: 'trade_1',
+            symbol: 'AAPL',
+            side: 'buy',
+            shares: 2,
+            price: 100,
+            quoteAsOf: '2026-04-07',
+            executedAt: '2026-04-07T12:00:00.000Z',
+          },
+        ],
+      }),
+    } as Response);
+
+    const result = await fetchTradeHistory('token_1');
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]?.symbol).toBe('AAPL');
+  });
+
+  it('fetchTradeHistory throws on malformed response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ trades: [] }),
+    } as Response);
+
+    await expect(fetchTradeHistory('token_1')).rejects.toThrow(
+      'Unable to load trade history.',
+    );
   });
 });

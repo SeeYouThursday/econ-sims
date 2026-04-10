@@ -6,6 +6,8 @@ export default function PortfolioCard({
   portfolio: PortfolioSnapshot;
 }) {
   const positionEntries = Object.entries(portfolio.positions);
+  const pnlIsPositive = portfolio.pnlValue >= 0;
+  const pnlToneClass = pnlIsPositive ? 'text-emerald-700' : 'text-rose-700';
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5">
@@ -31,6 +33,16 @@ export default function PortfolioCard({
             ${portfolio.totalValue.toLocaleString()}
           </p>
         </div>
+      </div>
+
+      <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+        <p className="text-xs text-slate-500">Gain / Loss</p>
+        <p className={`text-lg font-black ${pnlToneClass}`}>
+          {pnlIsPositive ? '+' : '-'}$
+          {Math.abs(portfolio.pnlValue).toLocaleString()} (
+          {pnlIsPositive ? '+' : ''}
+          {portfolio.pnlPercent.toFixed(2)}%)
+        </p>
       </div>
 
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">

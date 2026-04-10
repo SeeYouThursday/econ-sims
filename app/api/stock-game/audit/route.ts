@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { TeacherAuthError, requireTeacherAuth } from '@/lib/clerk';
-import { assertTeacherOwnsClassroom } from '@/lib/teacherStore';
+import {
+  assertTeacherOwnsClassroom,
+  TeacherAccessError,
+} from '@/lib/teacherStore';
 import {
   ensureTeacherClassroom,
   getTeacherAudit,
@@ -65,6 +68,7 @@ async function getAuditWithTeacherResync(
         classroomCode: classroom.code,
         teacherUserId,
         title: classroom.title,
+        startingCash: classroom.startingCash,
       });
 
       return getTeacherAudit(auditInput);
@@ -88,6 +92,7 @@ export async function POST(request: Request) {
         classroomCode: classroom.code,
         teacherUserId,
         title: classroom.title,
+        startingCash: classroom.startingCash,
       });
     }
 
@@ -122,7 +127,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(audit);
   } catch (error) {
-    if (error instanceof TeacherAuthError) {
+    if (
+      error instanceof TeacherAuthError ||
+      error instanceof TeacherAccessError
+    ) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },

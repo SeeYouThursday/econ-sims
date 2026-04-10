@@ -101,6 +101,61 @@ export async function upsertStudentAlias({
   `;
 }
 
+export async function upsertStudentAliasesBulk(
+  entries: Array<{
+    classroomCode: string;
+    username: string;
+    isActive?: boolean;
+  }>,
+) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return;
+  }
+
+  const normalizedEntries = entries.map((entry) => ({
+    id: randomUUID(),
+    classroomCode: normalizeClassroomCode(entry.classroomCode),
+    username: normalizeUsername(entry.username),
+    isActive: entry.isActive ?? true,
+  }));
+
+  if (!isNeonConfigured()) {
+    const store = getMemoryStore();
+    for (const entry of normalizedEntries) {
+      const key = makeKey(entry.classroomCode, entry.username);
+      const existing = store.aliasesByClassAndName[key];
+      store.aliasesByClassAndName[key] = {
+        id: existing?.id ?? entry.id,
+        classroomCode: entry.classroomCode,
+        username: entry.username,
+        isActive: entry.isActive,
+        createdAt: existing?.createdAt ?? nowIso(),
+      };
+    }
+    return;
+  }
+
+  await ensureAliasTable();
+  const sql = getNeonSql();
+  const ids = normalizedEntries.map((entry) => entry.id);
+  const classroomCodes = normalizedEntries.map((entry) => entry.classroomCode);
+  const usernames = normalizedEntries.map((entry) => entry.username);
+  const isActiveValues = normalizedEntries.map((entry) => entry.isActive);
+
+  await sql`
+    INSERT INTO stock_game_student_aliases (id, classroom_code, username, is_active)
+    SELECT *
+    FROM UNNEST(
+      ${ids}::text[],
+      ${classroomCodes}::text[],
+      ${usernames}::text[],
+      ${isActiveValues}::boolean[]
+    )
+    ON CONFLICT (classroom_code, username)
+    DO UPDATE SET is_active = EXCLUDED.is_active
+  `;
+}
+
 export async function deleteStudentAlias({
   classroomCode,
   username,

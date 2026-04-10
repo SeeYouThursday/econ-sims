@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetStockGameState } from '../lib/stockGameStore';
 
 const CLASSROOM = process.env.STOCK_GAME_CLASSROOM_CODE ?? 'DEMO101';
@@ -7,7 +7,37 @@ const TEACHER_PASSCODE =
 
 describe('/api/stock-game routes', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.stubEnv('POLYGON_API_KEY', 'test-key');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (!url.includes('api.polygon.io')) {
+        throw new Error(`Unexpected fetch URL in stock-game tests: ${url}`);
+      }
+
+      const priceBySymbol: Record<string, number> = {
+        AAPL: 100,
+        MSFT: 100,
+      };
+
+      const symbolMatch = url.match(/\/ticker\/([^/]+)\/range/);
+      const symbol = symbolMatch?.[1]?.toUpperCase() ?? 'AAPL';
+      const close = priceBySymbol[symbol] ?? 100;
+
+      return {
+        ok: true,
+        json: async () => ({
+          results: [{ c: close }],
+        }),
+      } as Response;
+    });
+
     return __resetStockGameState();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   it('creates student, logs in, trades, and returns portfolio', async () => {
@@ -191,8 +221,8 @@ describe('/api/stock-game routes', () => {
     expect(leaderboard.entries).toHaveLength(2);
     expect(leaderboard.entries[0]?.username).toBe('student_a1');
     expect(leaderboard.entries[0]?.rank).toBe(1);
-    expect(leaderboard.entries[0]?.totalValue).toBe(10300);
-    expect(leaderboard.entries[1]?.totalValue).toBe(10200);
+    expect(leaderboard.entries[0]?.totalValue).toBe(10000);
+    expect(leaderboard.entries[1]?.totalValue).toBe(10000);
     expect(leaderboard.source).toBe('computed');
 
     const cachedRes = await leaderboardRoute.GET(
@@ -497,5 +527,153 @@ describe('/api/stock-game routes', () => {
     expect(auditPayload.piiIncluded).toBe(false);
     expect(auditPayload.usernames).toBeUndefined();
     expect(auditPayload.topSymbols[0]?.symbol).toBe('AAPL');
+  });
+
+  it('uses server quote price and ignores client-supplied trade price', async () => {
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+    const authRoute = await import('../app/api/stock-game/auth/route');
+    const tradesRoute = await import('../app/api/stock-game/trades/route');
+    const portfolioRoute =
+      await import('../app/api/stock-game/portfolio/route');
+
+    const createRes = await studentsRoute.POST(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          username: 'student_z1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(createRes.status).toBe(201);
+
+    const authRes = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_z1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(authRes.status).toBe(200);
+    const authPayload = (await authRes.json()) as { token: string };
+
+    const tradeRes = await tradesRoute.POST(
+      new Request('http://localhost/api/stock-game/trades', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: authPayload.token,
+          symbol: 'AAPL',
+          side: 'buy',
+          shares: 1,
+          price: 1,
+        }),
+      }),
+    );
+    expect(tradeRes.status).toBe(201);
+
+    const tradePayload = (await tradeRes.json()) as {
+      latestPrice: number;
+      quoteAsOf: string;
+      executedAt: string;
+      portfolio: { cash: number };
+    };
+    expect(tradePayload.latestPrice).toBe(100);
+    expect(tradePayload.quoteAsOf).toBeTypeOf('string');
+    expect(tradePayload.executedAt).toBeTypeOf('string');
+    expect(tradePayload.portfolio.cash).toBe(9900);
+
+    const portfolioRes = await portfolioRoute.GET(
+      new Request(
+        `http://localhost/api/stock-game/portfolio?token=${authPayload.token}`,
+      ),
+    );
+    expect(portfolioRes.status).toBe(200);
+    const portfolioPayload = (await portfolioRes.json()) as {
+      holdingsValue: number;
+      totalValue: number;
+    };
+
+    expect(portfolioPayload.holdingsValue).toBe(100);
+    expect(portfolioPayload.totalValue).toBe(10000);
+  });
+
+  it('returns recent trade history for a signed-in student token', async () => {
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+    const authRoute = await import('../app/api/stock-game/auth/route');
+    const tradesRoute = await import('../app/api/stock-game/trades/route');
+
+    const createRes = await studentsRoute.POST(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          username: 'student_h1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(createRes.status).toBe(201);
+
+    const authRes = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_h1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(authRes.status).toBe(200);
+    const authPayload = (await authRes.json()) as { token: string };
+
+    const tradeRes = await tradesRoute.POST(
+      new Request('http://localhost/api/stock-game/trades', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: authPayload.token,
+          symbol: 'AAPL',
+          side: 'buy',
+          shares: 2,
+        }),
+      }),
+    );
+    expect(tradeRes.status).toBe(201);
+
+    const historyRes = await tradesRoute.GET(
+      new Request(
+        `http://localhost/api/stock-game/trades?token=${authPayload.token}&limit=10`,
+      ),
+    );
+    expect(historyRes.status).toBe(200);
+
+    const historyPayload = (await historyRes.json()) as {
+      classroomCode: string;
+      username: string;
+      trades: Array<{
+        symbol: string;
+        side: string;
+        shares: number;
+        price: number;
+        quoteAsOf: string;
+        executedAt: string;
+      }>;
+    };
+
+    expect(historyPayload.classroomCode).toBe(CLASSROOM);
+    expect(historyPayload.username).toBe('student_h1');
+    expect(historyPayload.trades).toHaveLength(1);
+    expect(historyPayload.trades[0]?.symbol).toBe('AAPL');
+    expect(historyPayload.trades[0]?.side).toBe('buy');
+    expect(historyPayload.trades[0]?.shares).toBe(2);
+    expect(historyPayload.trades[0]?.price).toBe(100);
+    expect(historyPayload.trades[0]?.quoteAsOf).toBeTypeOf('string');
+    expect(historyPayload.trades[0]?.executedAt).toBeTypeOf('string');
   });
 });

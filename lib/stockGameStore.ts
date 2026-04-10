@@ -9,6 +9,7 @@ type Classroom = {
   teacherPasscodeHash?: string;
   ownerTeacherId?: string;
   title?: string;
+  startingCash?: number;
   createdAt: string;
 };
 
@@ -16,6 +17,7 @@ type Student = {
   id: string;
   classroomCode: string;
   username: string;
+  studentPasscode?: string;
   passcodeHash: string;
   isActive?: boolean;
   cash: number;
@@ -38,7 +40,25 @@ type Trade = {
   side: TradeSide;
   shares: number;
   price: number;
+  quoteAsOf: string;
   executedAt: string;
+};
+
+type StudentTradeHistoryEntry = {
+  id: string;
+  symbol: string;
+  side: TradeSide;
+  shares: number;
+  price: number;
+  quoteAsOf: string;
+  executedAt: string;
+};
+
+type StudentTradeHistoryResponse = {
+  classroomCode: string;
+  username: string;
+  asOf: string;
+  trades: StudentTradeHistoryEntry[];
 };
 
 type PortfolioSnapshot = {
@@ -49,6 +69,8 @@ type PortfolioSnapshot = {
   positions: Record<string, number>;
   holdingsValue: number;
   totalValue: number;
+  pnlValue: number;
+  pnlPercent: number;
 };
 
 type LeaderboardEntry = {
@@ -88,6 +110,16 @@ type CreateStudentInput = {
   studentPasscode: string;
 };
 
+type CreateStudentsBatchInput = {
+  classroomCode: string;
+  teacherPasscode?: string;
+  teacherUserId?: string;
+  students: Array<{
+    username: string;
+    studentPasscode: string;
+  }>;
+};
+
 type LoginInput = {
   classroomCode: string;
   username: string;
@@ -100,6 +132,7 @@ type PlaceTradeInput = {
   side: TradeSide;
   shares: number;
   price: number;
+  quoteAsOf?: string;
 };
 
 type DeleteStudentInput = {
@@ -124,6 +157,7 @@ type ListStudentsInput = {
 type ClassroomStudentSummary = {
   studentId: string;
   username: string;
+  studentPasscode: string | null;
   createdAt: string;
   isActive: boolean;
   cash: number;
@@ -138,6 +172,13 @@ type ManageStudentInput = {
   teacherUserId?: string;
   username: string;
   action: 'reset' | 'deactivate' | 'activate';
+};
+
+type ManageClassroomStudentsInput = {
+  classroomCode: string;
+  teacherPasscode?: string;
+  teacherUserId?: string;
+  action: 'reset-all';
 };
 
 export class StockGameError extends Error {
@@ -543,14 +584,20 @@ function ensureClassroom(
   return classroom;
 }
 
+function getClassStartingCash(classroom?: Classroom) {
+  return classroom?.startingCash ?? STARTING_CASH;
+}
+
 export async function ensureTeacherClassroom({
   classroomCode,
   teacherUserId,
   title,
+  startingCash,
 }: {
   classroomCode: string;
   teacherUserId: string;
   title?: string;
+  startingCash?: number;
 }) {
   const state = await loadState();
   const normalizedCode = validateClassroomCode(classroomCode);
@@ -568,6 +615,7 @@ export async function ensureTeacherClassroom({
       ...existing,
       ownerTeacherId: teacherUserId,
       title: title ?? existing.title,
+      startingCash: startingCash ?? getClassStartingCash(existing),
     };
     await saveState(state);
     return state.classrooms[normalizedCode];
@@ -577,6 +625,7 @@ export async function ensureTeacherClassroom({
     code: normalizedCode,
     ownerTeacherId: teacherUserId,
     title,
+    startingCash: startingCash ?? STARTING_CASH,
     createdAt: nowIso(),
   };
   await saveState(state);
@@ -609,6 +658,8 @@ function getPortfolioSnapshot(
   state: PersistedState,
   student: Student,
 ): PortfolioSnapshot {
+  const classroom = state.classrooms[student.classroomCode];
+  const classStartingCash = getClassStartingCash(classroom);
   const holdingsValue = Object.entries(student.positions).reduce(
     (sum, [symbol, shares]) => {
       return (
@@ -618,6 +669,10 @@ function getPortfolioSnapshot(
     0,
   );
 
+  const totalValue = Number((student.cash + holdingsValue).toFixed(2));
+  const pnlValue = Number((totalValue - classStartingCash).toFixed(2));
+  const pnlPercent = Number(((pnlValue / classStartingCash) * 100).toFixed(2));
+
   return {
     studentId: student.id,
     classroomCode: student.classroomCode,
@@ -625,7 +680,9 @@ function getPortfolioSnapshot(
     cash: Number(student.cash.toFixed(2)),
     positions: { ...student.positions },
     holdingsValue: Number(holdingsValue.toFixed(2)),
-    totalValue: Number((student.cash + holdingsValue).toFixed(2)),
+    totalValue,
+    pnlValue,
+    pnlPercent,
   };
 }
 
@@ -641,7 +698,13 @@ export async function createStudent(input: CreateStudentInput) {
     'Student passcode',
   );
 
-  ensureClassroom(state, classroomCode, teacherPasscode, input.teacherUserId);
+  const classroom = ensureClassroom(
+    state,
+    classroomCode,
+    teacherPasscode,
+    input.teacherUserId,
+  );
+  const classStartingCash = getClassStartingCash(classroom);
 
   const key = makeClassAndUserKey(classroomCode, username);
   if (state.studentsByClassAndName[key]) {
@@ -656,9 +719,10 @@ export async function createStudent(input: CreateStudentInput) {
     id,
     classroomCode,
     username,
+    studentPasscode,
     passcodeHash: hashSecret(studentPasscode),
     isActive: true,
-    cash: STARTING_CASH,
+    cash: classStartingCash,
     positions: {},
     createdAt: nowIso(),
   };
@@ -671,8 +735,98 @@ export async function createStudent(input: CreateStudentInput) {
     studentId: id,
     classroomCode,
     username: student.username,
-    startingCash: STARTING_CASH,
+    startingCash: classStartingCash,
     createdAt: student.createdAt,
+    storage: isRedisConfigured() ? 'redis' : 'memory',
+  };
+}
+
+export async function createStudentsBatch(input: CreateStudentsBatchInput) {
+  const state = await loadState();
+  const classroomCode = validateClassroomCode(input.classroomCode);
+  const teacherPasscode = input.teacherPasscode
+    ? validatePasscode(input.teacherPasscode, 'Teacher passcode')
+    : undefined;
+
+  const classroom = ensureClassroom(
+    state,
+    classroomCode,
+    teacherPasscode,
+    input.teacherUserId,
+  );
+  const classStartingCash = getClassStartingCash(classroom);
+
+  if (!Array.isArray(input.students) || input.students.length === 0) {
+    throw new StockGameError('At least one student is required.');
+  }
+
+  if (input.students.length > 35) {
+    throw new StockGameError('You can create up to 35 students at once.');
+  }
+
+  const normalizedStudents = input.students.map((entry) => ({
+    username: validateUsername(entry.username),
+    studentPasscode: validatePasscode(
+      entry.studentPasscode,
+      'Student passcode',
+    ),
+  }));
+
+  const seenUsernames = new Set<string>();
+  for (const entry of normalizedStudents) {
+    if (seenUsernames.has(entry.username)) {
+      throw new StockGameError(
+        `Duplicate alias in bulk request: ${entry.username}`,
+        409,
+      );
+    }
+
+    const key = makeClassAndUserKey(classroomCode, entry.username);
+    if (state.studentsByClassAndName[key]) {
+      throw new StockGameError(
+        `Username is already assigned in this classroom: ${entry.username}`,
+        409,
+      );
+    }
+
+    seenUsernames.add(entry.username);
+  }
+
+  const createdAt = nowIso();
+  const createdStudents = normalizedStudents.map((entry) => {
+    const studentId = randomUUID();
+    const student: Student = {
+      id: studentId,
+      classroomCode,
+      username: entry.username,
+      studentPasscode: entry.studentPasscode,
+      passcodeHash: hashSecret(entry.studentPasscode),
+      isActive: true,
+      cash: classStartingCash,
+      positions: {},
+      createdAt,
+    };
+
+    state.students[studentId] = student;
+    state.studentsByClassAndName[
+      makeClassAndUserKey(classroomCode, entry.username)
+    ] = studentId;
+
+    return {
+      studentId,
+      classroomCode,
+      username: entry.username,
+      startingCash: classStartingCash,
+      createdAt,
+    };
+  });
+
+  await saveState(state);
+
+  return {
+    classroomCode,
+    createdCount: createdStudents.length,
+    students: createdStudents,
     storage: isRedisConfigured() ? 'redis' : 'memory',
   };
 }
@@ -781,6 +935,8 @@ export async function placeTrade(input: PlaceTradeInput) {
     input.price.toFixed(2),
   );
 
+  const executedAt = nowIso();
+  const quoteAsOf = input.quoteAsOf?.trim() || executedAt.slice(0, 10);
   state.trades.push({
     id: randomUUID(),
     classroomCode: session.classroomCode,
@@ -789,7 +945,8 @@ export async function placeTrade(input: PlaceTradeInput) {
     side: input.side,
     shares: input.shares,
     price: Number(input.price.toFixed(2)),
-    executedAt: nowIso(),
+    quoteAsOf,
+    executedAt,
   });
 
   await saveState(state);
@@ -798,7 +955,53 @@ export async function placeTrade(input: PlaceTradeInput) {
   return {
     portfolio: getPortfolioSnapshot(state, student),
     latestPrice: Number(input.price.toFixed(2)),
+    quoteAsOf,
+    executedAt,
     storage: isRedisConfigured() ? 'redis' : 'memory',
+  };
+}
+
+export async function listStudentTrades(
+  tokenInput: string,
+  limitInput = 20,
+): Promise<StudentTradeHistoryResponse> {
+  const state = await loadState();
+  const token = tokenInput.trim();
+  if (!token) {
+    throw new StockGameError('Session token is required.', 401);
+  }
+
+  const session = getActiveSession(state, token);
+  const student = state.students[session.studentId];
+  if (!student) {
+    throw new StockGameError('Student account was not found.', 404);
+  }
+
+  const limit = Number.isFinite(limitInput)
+    ? Math.max(1, Math.min(100, Math.trunc(limitInput)))
+    : 20;
+
+  const trades = state.trades
+    .filter((trade) => trade.studentId === student.id)
+    .sort((a, b) => Date.parse(b.executedAt) - Date.parse(a.executedAt))
+    .slice(0, limit)
+    .map((trade) => ({
+      id: trade.id,
+      symbol: trade.symbol,
+      side: trade.side,
+      shares: trade.shares,
+      price: Number(trade.price.toFixed(2)),
+      quoteAsOf: trade.quoteAsOf,
+      executedAt: trade.executedAt,
+    }));
+
+  await saveState(state);
+
+  return {
+    classroomCode: session.classroomCode,
+    username: student.username,
+    asOf: nowIso(),
+    trades,
   };
 }
 
@@ -967,6 +1170,7 @@ export async function listStudentsForClassroom(input: ListStudentsInput) {
       return {
         studentId: student.id,
         username: student.username,
+        studentPasscode: student.studentPasscode ?? null,
         createdAt: student.createdAt,
         isActive: isStudentActive(student),
         cash: portfolio.cash,
@@ -982,7 +1186,7 @@ export async function listStudentsForClassroom(input: ListStudentsInput) {
     asOf: nowIso(),
     studentCount: students.length,
     students,
-    piiIncluded: false,
+    piiIncluded: true,
     storage: isRedisConfigured() ? 'redis' : 'memory',
   };
 }
@@ -995,7 +1199,12 @@ export async function manageStudent(input: ManageStudentInput) {
     : undefined;
   const username = validateUsername(input.username);
 
-  ensureClassroom(state, classroomCode, teacherPasscode, input.teacherUserId);
+  const classroom = ensureClassroom(
+    state,
+    classroomCode,
+    teacherPasscode,
+    input.teacherUserId,
+  );
 
   const key = makeClassAndUserKey(classroomCode, username);
   const studentId = state.studentsByClassAndName[key];
@@ -1009,7 +1218,7 @@ export async function manageStudent(input: ManageStudentInput) {
   }
 
   if (input.action === 'reset') {
-    student.cash = STARTING_CASH;
+    student.cash = getClassStartingCash(classroom);
     student.positions = {};
 
     for (const [token, session] of Object.entries(state.sessions)) {
@@ -1041,6 +1250,63 @@ export async function manageStudent(input: ManageStudentInput) {
     username,
     action: input.action,
     isActive: isStudentActive(student),
+    storage: isRedisConfigured() ? 'redis' : 'memory',
+  };
+}
+
+export async function manageClassroomStudents(
+  input: ManageClassroomStudentsInput,
+) {
+  const state = await loadState();
+  const classroomCode = validateClassroomCode(input.classroomCode);
+  const teacherPasscode = input.teacherPasscode
+    ? validatePasscode(input.teacherPasscode, 'Teacher passcode')
+    : undefined;
+
+  const classroom = ensureClassroom(
+    state,
+    classroomCode,
+    teacherPasscode,
+    input.teacherUserId,
+  );
+
+  if (input.action !== 'reset-all') {
+    throw new StockGameError('Unsupported classroom action.');
+  }
+
+  const classStartingCash = getClassStartingCash(classroom);
+  const studentIdsToReset = Object.values(state.students)
+    .filter((student) => student.classroomCode === classroomCode)
+    .map((student) => student.id);
+
+  for (const studentId of studentIdsToReset) {
+    const student = state.students[studentId];
+    if (!student) {
+      continue;
+    }
+
+    student.cash = classStartingCash;
+    student.positions = {};
+  }
+
+  for (const [token, session] of Object.entries(state.sessions)) {
+    if (session.classroomCode === classroomCode) {
+      delete state.sessions[token];
+    }
+  }
+
+  state.trades = state.trades.filter(
+    (trade) => trade.classroomCode !== classroomCode,
+  );
+
+  await saveState(state);
+  await clearCachedLeaderboard(classroomCode);
+
+  return {
+    classroomCode,
+    action: input.action,
+    studentCount: studentIdsToReset.length,
+    startingCash: classStartingCash,
     storage: isRedisConfigured() ? 'redis' : 'memory',
   };
 }
