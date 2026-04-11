@@ -8,15 +8,16 @@ export default function LeaderboardCard({
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5">
       <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-        Leaderboard
+        Class Rankings
       </p>
       <p className="mt-1 text-xs text-slate-500">
-        As of {new Date(leaderboard.asOf).toLocaleString()} (
-        {leaderboard.source})
+        Updated {new Date(leaderboard.asOf).toLocaleString()}
       </p>
 
       {leaderboard.entries.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-600">No students ranked yet.</p>
+        <p className="mt-3 text-sm text-slate-600">
+          Waiting for students to join…
+        </p>
       ) : (
         <div className="mt-3 space-y-2">
           {leaderboard.entries.map((entry) => (

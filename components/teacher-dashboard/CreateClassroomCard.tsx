@@ -1,18 +1,22 @@
 type CreateClassroomCardProps = {
   title: string;
   newClassStartingCash: string;
+  newClassDurationDays: string;
   creatingClassroom: boolean;
   onTitleChange: (value: string) => void;
   onStartingCashChange: (value: string) => void;
+  onDurationDaysChange: (value: string) => void;
   onCreateClassroom: () => void;
 };
 
 export function CreateClassroomCard({
   title,
   newClassStartingCash,
+  newClassDurationDays,
   creatingClassroom,
   onTitleChange,
   onStartingCashChange,
+  onDurationDaysChange,
   onCreateClassroom,
 }: CreateClassroomCardProps) {
   return (
@@ -47,6 +51,25 @@ export function CreateClassroomCard({
         placeholder="10000"
         title="Starting cash for new students in this classroom"
         aria-label="New classroom starting cash"
+        className="mt-1 w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-500"
+      />
+      <label
+        htmlFor="new-class-duration-days"
+        className="mt-3 block text-xs font-semibold uppercase text-slate-700"
+      >
+        Game duration (days)
+      </label>
+      <input
+        id="new-class-duration-days"
+        type="number"
+        min={1}
+        max={365}
+        step={1}
+        value={newClassDurationDays}
+        onChange={(event) => onDurationDaysChange(event.target.value)}
+        placeholder="30"
+        title="Game duration in days"
+        aria-label="New classroom game duration"
         className="mt-1 w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-500"
       />
       <button

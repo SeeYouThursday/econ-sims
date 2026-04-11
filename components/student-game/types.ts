@@ -9,6 +9,8 @@ export type PortfolioSnapshot = {
   studentId: string;
   classroomCode: string;
   username: string;
+  classroomActive: boolean;
+  classroomEndsAt: string | null;
   cash: number;
   positions: Record<string, number>;
   holdingsValue: number;

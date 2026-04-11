@@ -84,14 +84,14 @@ export default function StudentSignInPanel({
   return (
     <div className="mx-auto max-w-4xl rounded-4xl border border-slate-200 bg-white p-8 shadow-xl">
       <p className="text-xs font-black uppercase tracking-[0.28em] text-slate-500">
-        Student sign-in
+        Sign In
       </p>
       <h1 className="mt-4 text-3xl font-black text-slate-900">
-        Join your classroom trading game
+        Stock Market Game
       </h1>
       <p className="mt-3 text-sm leading-7 text-slate-600">
-        Enter the class code, your student alias, and your passcode from your
-        teacher.
+        Ask your teacher for your class code, alias, and passcode. Then enter
+        them below.
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">

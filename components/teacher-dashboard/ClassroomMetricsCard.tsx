@@ -14,6 +14,7 @@ type ClassroomMetricsCardProps = {
   onSaveStartingCash: () => void;
   onRefreshMetrics: () => void;
   onResetAll: () => void;
+  onRestartGame: () => void;
 };
 
 export function ClassroomMetricsCard({
@@ -27,6 +28,7 @@ export function ClassroomMetricsCard({
   onSaveStartingCash,
   onRefreshMetrics,
   onResetAll,
+  onRestartGame,
 }: ClassroomMetricsCardProps) {
   return (
     <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -75,6 +77,17 @@ export function ClassroomMetricsCard({
             className="rounded-full border border-rose-300 px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em] text-rose-700 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Reset all
+          </button>
+          <button
+            type="button"
+            onClick={onRestartGame}
+            disabled={
+              studentActionKey !== null ||
+              selectedClassroomStudents.length === 0
+            }
+            className="rounded-full border border-amber-300 px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em] text-amber-700 transition hover:border-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Restart game
           </button>
         </div>
       </div>

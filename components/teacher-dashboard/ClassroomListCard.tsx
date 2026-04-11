@@ -36,7 +36,8 @@ export function ClassroomListCard({
               <p className="text-xs font-black">{classroom.title}</p>
               <p className="mt-0.5 text-[10px] opacity-75">{classroom.code}</p>
               <p className="mt-0.5 text-[10px] opacity-75">
-                Start ${classroom.startingCash.toLocaleString()}
+                Start ${classroom.startingCash.toLocaleString()} •{' '}
+                {classroom.durationDays}d
               </p>
             </button>
           ))}

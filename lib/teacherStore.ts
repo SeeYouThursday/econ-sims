@@ -13,6 +13,7 @@ type TeacherClassroomRecord = {
   code: string;
   title: string;
   startingCash: number;
+  durationDays: number;
   createdAt: string;
 };
 
@@ -89,6 +90,21 @@ function validateStartingCash(startingCash: unknown) {
   return Math.trunc(parsed);
 }
 
+const DEFAULT_DURATION_DAYS = 30;
+
+function validateDurationDays(durationDays: unknown) {
+  const parsed =
+    typeof durationDays === 'number'
+      ? durationDays
+      : Number(durationDays ?? DEFAULT_DURATION_DAYS);
+
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 365) {
+    throw new Error('Game duration must be between 1 and 365 days.');
+  }
+
+  return Math.trunc(parsed);
+}
+
 function normalizeClassroomCode(code: string) {
   return code.trim().toUpperCase();
 }
@@ -142,6 +158,11 @@ async function ensureTeacherTables() {
   await sql`
     ALTER TABLE stock_game_classrooms
     ADD COLUMN IF NOT EXISTS starting_cash INTEGER NOT NULL DEFAULT 10000
+  `;
+
+  await sql`
+    ALTER TABLE stock_game_classrooms
+    ADD COLUMN IF NOT EXISTS duration_days INTEGER NOT NULL DEFAULT 30
   `;
 
   await sql`
@@ -348,6 +369,7 @@ export async function listTeacherClassrooms(clerkUserId: string) {
       .map((classroom) => ({
         ...classroom,
         startingCash: validateStartingCash(classroom.startingCash),
+        durationDays: validateDurationDays(classroom.durationDays),
       }))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
@@ -355,7 +377,7 @@ export async function listTeacherClassrooms(clerkUserId: string) {
   await ensureTeacherTables();
   const sql = getNeonSql();
   const rows = await sql`
-    SELECT id, teacher_id, code, title, starting_cash, created_at
+    SELECT id, teacher_id, code, title, starting_cash, duration_days, created_at
     FROM stock_game_classrooms
     WHERE teacher_id = ${teacher.id}
     ORDER BY created_at ASC
@@ -367,6 +389,7 @@ export async function listTeacherClassrooms(clerkUserId: string) {
     code: String(row.code ?? ''),
     title: String(row.title ?? ''),
     startingCash: validateStartingCash(row.starting_cash),
+    durationDays: validateDurationDays(row.duration_days),
     createdAt: new Date(String(row.created_at ?? nowIso())).toISOString(),
   }));
 }
@@ -375,10 +398,12 @@ export async function createTeacherClassroom(
   clerkUserId: string,
   titleInput: string,
   startingCashInput?: unknown,
+  durationDaysInput?: unknown,
 ) {
   const teacher = await requireTeacherRecord(clerkUserId);
   const title = validateClassroomTitle(titleInput);
   const startingCash = validateStartingCash(startingCashInput);
+  const durationDays = validateDurationDays(durationDaysInput);
   const code = await generateUniqueClassroomCode();
 
   if (!isNeonConfigured()) {
@@ -389,6 +414,7 @@ export async function createTeacherClassroom(
       code,
       title,
       startingCash,
+      durationDays,
       createdAt: nowIso(),
     };
     store.classroomsByCode[classroom.code] = classroom;
@@ -398,9 +424,9 @@ export async function createTeacherClassroom(
   await ensureTeacherTables();
   const sql = getNeonSql();
   const rows = await sql`
-    INSERT INTO stock_game_classrooms (id, teacher_id, code, title, starting_cash)
-    VALUES (${randomUUID()}, ${teacher.id}, ${code}, ${title}, ${startingCash})
-    RETURNING id, teacher_id, code, title, starting_cash, created_at
+    INSERT INTO stock_game_classrooms (id, teacher_id, code, title, starting_cash, duration_days)
+    VALUES (${randomUUID()}, ${teacher.id}, ${code}, ${title}, ${startingCash}, ${durationDays})
+    RETURNING id, teacher_id, code, title, starting_cash, duration_days, created_at
   `;
 
   const classroom = toObjectRows(rows)[0];
@@ -414,6 +440,7 @@ export async function createTeacherClassroom(
     code: String(classroom.code ?? ''),
     title: String(classroom.title ?? ''),
     startingCash: validateStartingCash(classroom.starting_cash),
+    durationDays: validateDurationDays(classroom.duration_days),
     createdAt: new Date(String(classroom.created_at ?? nowIso())).toISOString(),
   };
 }
@@ -432,13 +459,14 @@ export async function assertTeacherOwnsClassroom(
       throw new Error('Teacher does not own this classroom.');
     }
     classroom.startingCash = validateStartingCash(classroom.startingCash);
+    classroom.durationDays = validateDurationDays(classroom.durationDays);
     return classroom;
   }
 
   await ensureTeacherTables();
   const sql = getNeonSql();
   const rows = await sql`
-    SELECT id, teacher_id, code, title, starting_cash, created_at
+    SELECT id, teacher_id, code, title, starting_cash, duration_days, created_at
     FROM stock_game_classrooms
     WHERE code = ${classroomCode}
       AND teacher_id = ${teacher.id}
@@ -456,6 +484,7 @@ export async function assertTeacherOwnsClassroom(
     code: String(classroom.code ?? ''),
     title: String(classroom.title ?? ''),
     startingCash: validateStartingCash(classroom.starting_cash),
+    durationDays: validateDurationDays(classroom.duration_days),
     createdAt: new Date(String(classroom.created_at ?? nowIso())).toISOString(),
   };
 }
@@ -487,7 +516,7 @@ export async function updateTeacherClassroomStartingCash(
     SET starting_cash = ${startingCash}
     WHERE code = ${classroomCode}
       AND teacher_id = ${teacher.id}
-    RETURNING id, teacher_id, code, title, starting_cash, created_at
+    RETURNING id, teacher_id, code, title, starting_cash, duration_days, created_at
   `;
 
   const classroom = toObjectRows(rows)[0];
@@ -501,6 +530,7 @@ export async function updateTeacherClassroomStartingCash(
     code: String(classroom.code ?? ''),
     title: String(classroom.title ?? ''),
     startingCash: validateStartingCash(classroom.starting_cash),
+    durationDays: validateDurationDays(classroom.duration_days),
     createdAt: new Date(String(classroom.created_at ?? nowIso())).toISOString(),
   };
 }

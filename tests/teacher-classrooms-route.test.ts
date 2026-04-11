@@ -44,10 +44,12 @@ describe('teacher classroom routes', () => {
       code: string;
       title: string;
       startingCash: number;
+      durationDays: number;
     };
     expect(created.title).toBe('Period 3 Economics');
     expect(created.code).toHaveLength(6);
     expect(created.startingCash).toBe(10000);
+    expect(created.durationDays).toBe(30); // default
 
     const listRes = await classroomsRoute.GET();
     expect(listRes.status).toBe(200);
@@ -56,10 +58,12 @@ describe('teacher classroom routes', () => {
       code: string;
       title: string;
       startingCash: number;
+      durationDays: number;
     }>;
     expect(classrooms).toHaveLength(1);
     expect(classrooms[0]?.code).toBe(created.code);
     expect(classrooms[0]?.startingCash).toBe(10000);
+    expect(classrooms[0]?.durationDays).toBe(30);
   });
 
   it('allows setting and updating classroom starting cash and applies it to new students', async () => {
@@ -382,5 +386,40 @@ describe('teacher classroom routes', () => {
     expect(resetPayload.action).toBe('reset-all');
     expect(resetPayload.studentCount).toBe(2);
     expect(resetPayload.startingCash).toBe(7500);
+  });
+
+  it('supports creating classrooms with custom duration days', async () => {
+    const classroomsRoute = await import('../app/api/teacher/classrooms/route');
+
+    const createRes = await classroomsRoute.POST(
+      new Request('http://localhost/api/teacher/classrooms', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Summer Intensive',
+          startingCash: 15000,
+          durationDays: 60,
+        }),
+      }),
+    );
+
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()) as {
+      code: string;
+      title: string;
+      startingCash: number;
+      durationDays: number;
+    };
+    expect(created.title).toBe('Summer Intensive');
+    expect(created.startingCash).toBe(15000);
+    expect(created.durationDays).toBe(60);
+
+    const listRes = await classroomsRoute.GET();
+    expect(listRes.status).toBe(200);
+    const classrooms = (await listRes.json()) as Array<{
+      code: string;
+      durationDays: number;
+    }>;
+    const foundClassroom = classrooms.find((c) => c.code === created.code);
+    expect(foundClassroom?.durationDays).toBe(60);
   });
 });

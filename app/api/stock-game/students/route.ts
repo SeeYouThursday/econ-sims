@@ -55,7 +55,7 @@ type UpdateStudentBody = {
   classroomCode?: string;
   teacherPasscode?: string;
   username?: string;
-  action?: 'reset' | 'deactivate' | 'activate' | 'reset-all';
+  action?: 'reset' | 'deactivate' | 'activate' | 'reset-all' | 'restart-game';
 };
 
 type InternalRosterStudent = {
@@ -213,6 +213,7 @@ async function runWithTeacherClassroomResync<T>({
         teacherUserId,
         title: classroom.title,
         startingCash: classroom.startingCash,
+        durationDays: classroom.durationDays,
       });
 
       return run();
@@ -249,6 +250,7 @@ async function createStudentWithTeacherResync(
         teacherUserId,
         title: classroom.title,
         startingCash: classroom.startingCash,
+        durationDays: classroom.durationDays,
       });
 
       return createStudent(createInput);
@@ -285,6 +287,7 @@ async function createStudentsBatchWithTeacherResync(
         teacherUserId,
         title: classroom.title,
         startingCash: classroom.startingCash,
+        durationDays: classroom.durationDays,
       });
 
       return createStudentsBatch(createInput);
@@ -309,6 +312,7 @@ export async function POST(request: Request) {
         teacherUserId,
         title: classroom.title,
         startingCash: classroom.startingCash,
+        durationDays: classroom.durationDays,
       });
     }
 
@@ -385,6 +389,7 @@ export async function DELETE(request: Request) {
         teacherUserId,
         title: classroom.title,
         startingCash: classroom.startingCash,
+        durationDays: classroom.durationDays,
       });
     }
 
@@ -491,6 +496,7 @@ export async function GET(request: Request) {
         teacherUserId,
         title: classroom.title,
         startingCash: classroom.startingCash,
+        durationDays: classroom.durationDays,
       });
     }
 
@@ -618,6 +624,7 @@ export async function PATCH(request: Request) {
         teacherUserId,
         title: classroom.title,
         startingCash: classroom.startingCash,
+        durationDays: classroom.durationDays,
       });
     }
 
@@ -627,7 +634,7 @@ export async function PATCH(request: Request) {
 
     const action = body.action;
 
-    if (action === 'reset-all') {
+    if (action === 'reset-all' || action === 'restart-game') {
       const classroomCode = body.classroomCode ?? '';
       const result = await runWithTeacherClassroomResync({
         classroomCode,

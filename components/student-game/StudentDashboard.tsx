@@ -38,6 +38,33 @@ export default function StudentDashboard({
   const [submittingTrade, setSubmittingTrade] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFillMessage, setLastFillMessage] = useState<string | null>(null);
+  const classroomEnded = portfolio ? !portfolio.classroomActive : false;
+  const classroomDaysLeft = (() => {
+    if (!portfolio?.classroomActive || !portfolio.classroomEndsAt) {
+      return null;
+    }
+
+    const endsAtMs = Date.parse(portfolio.classroomEndsAt);
+    if (!Number.isFinite(endsAtMs)) {
+      return null;
+    }
+
+    const msRemaining = endsAtMs - Date.now();
+    if (msRemaining <= 0) {
+      return 0;
+    }
+
+    return Math.max(1, Math.ceil(msRemaining / (24 * 60 * 60 * 1000)));
+  })();
+  const classroomActiveMessage =
+    classroomDaysLeft !== null
+      ? classroomDaysLeft === 0
+        ? 'This game ends today. Finish strong.'
+        : `${classroomDaysLeft} day${classroomDaysLeft === 1 ? '' : 's'} left in this game.`
+      : null;
+  const classroomEndedMessage = classroomEnded
+    ? `This game has ended${portfolio?.classroomEndsAt ? ` on ${new Date(portfolio.classroomEndsAt).toLocaleDateString()}` : ''}. You can still view your results, but trading is turned off.`
+    : null;
 
   const loadSnapshot = useCallback(async () => {
     setLoading(true);
@@ -123,6 +150,18 @@ export default function StudentDashboard({
         </div>
       ) : null}
 
+      {classroomActiveMessage && !classroomEnded ? (
+        <div className="rounded-3xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
+          {classroomActiveMessage}
+        </div>
+      ) : null}
+
+      {classroomEndedMessage ? (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          {classroomEndedMessage}
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
           Loading classroom data...
@@ -136,6 +175,12 @@ export default function StudentDashboard({
             <TradeTicket
               onSubmit={handleTradeSubmit}
               submitting={submittingTrade}
+              tradingDisabled={classroomEnded}
+              disabledReason={
+                classroomEnded
+                  ? 'Trading is off because this classroom game has ended.'
+                  : undefined
+              }
             />
             <TradeHistoryCard history={tradeHistory} />
           </div>

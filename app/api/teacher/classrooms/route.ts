@@ -13,6 +13,7 @@ export const runtime = 'nodejs';
 type CreateTeacherClassroomBody = {
   title?: string;
   startingCash?: number;
+  durationDays?: number;
 };
 
 type UpdateTeacherClassroomBody = {
@@ -62,12 +63,14 @@ export async function POST(request: Request) {
       teacherUserId,
       body.title ?? '',
       body.startingCash,
+      body.durationDays,
     );
     await ensureTeacherClassroom({
       classroomCode: classroom.code,
       teacherUserId,
       title: classroom.title,
       startingCash: classroom.startingCash,
+      durationDays: classroom.durationDays,
     });
 
     return NextResponse.json(classroom, { status: 201 });
@@ -113,6 +116,7 @@ export async function PATCH(request: Request) {
       teacherUserId,
       title: classroom.title,
       startingCash: classroom.startingCash,
+      durationDays: classroom.durationDays,
     });
 
     return NextResponse.json(classroom);

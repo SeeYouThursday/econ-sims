@@ -34,6 +34,9 @@ function isPortfolioSnapshot(value: unknown): value is PortfolioSnapshot {
     typeof candidate.studentId === 'string' &&
     typeof candidate.classroomCode === 'string' &&
     typeof candidate.username === 'string' &&
+    typeof candidate.classroomActive === 'boolean' &&
+    (typeof candidate.classroomEndsAt === 'string' ||
+      candidate.classroomEndsAt === null) &&
     typeof candidate.cash === 'number' &&
     typeof candidate.holdingsValue === 'number' &&
     typeof candidate.totalValue === 'number' &&

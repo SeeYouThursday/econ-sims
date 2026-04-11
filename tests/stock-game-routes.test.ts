@@ -5,6 +5,29 @@ const CLASSROOM = process.env.STOCK_GAME_CLASSROOM_CODE ?? 'DEMO101';
 const TEACHER_PASSCODE =
   process.env.STOCK_GAME_TEACHER_PASSCODE ?? 'teacher-demo';
 
+function expireClassroom(classroomCode: string) {
+  const state = (
+    globalThis as typeof globalThis & {
+      __stockGameState?: {
+        classrooms?: Record<
+          string,
+          { createdAt: string; durationDays?: number }
+        >;
+      };
+    }
+  ).__stockGameState;
+
+  const classroom = state?.classrooms?.[classroomCode];
+  if (!classroom) {
+    throw new Error(
+      `Expected classroom ${classroomCode} to exist in test state.`,
+    );
+  }
+
+  classroom.durationDays = 1;
+  classroom.createdAt = '2000-01-01T00:00:00.000Z';
+}
+
 describe('/api/stock-game routes', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -675,5 +698,201 @@ describe('/api/stock-game routes', () => {
     expect(historyPayload.trades[0]?.price).toBe(100);
     expect(historyPayload.trades[0]?.quoteAsOf).toBeTypeOf('string');
     expect(historyPayload.trades[0]?.executedAt).toBeTypeOf('string');
+  });
+
+  it('rejects student sign-in when the classroom duration has ended', async () => {
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+    const authRoute = await import('../app/api/stock-game/auth/route');
+
+    const createRes = await studentsRoute.POST(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          username: 'student_expired1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(createRes.status).toBe(201);
+
+    expireClassroom(CLASSROOM);
+
+    const authRes = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_expired1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+
+    expect(authRes.status).toBe(403);
+    const authPayload = (await authRes.json()) as { error: string };
+    expect(authPayload.error).toContain('classroom game has ended');
+  });
+
+  it('rejects new trades when the classroom duration has ended', async () => {
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+    const authRoute = await import('../app/api/stock-game/auth/route');
+    const tradesRoute = await import('../app/api/stock-game/trades/route');
+
+    const createRes = await studentsRoute.POST(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          username: 'student_expired2',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(createRes.status).toBe(201);
+
+    const authRes = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_expired2',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(authRes.status).toBe(200);
+    const authPayload = (await authRes.json()) as { token: string };
+
+    expireClassroom(CLASSROOM);
+
+    const tradeRes = await tradesRoute.POST(
+      new Request('http://localhost/api/stock-game/trades', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: authPayload.token,
+          symbol: 'AAPL',
+          side: 'buy',
+          shares: 1,
+        }),
+      }),
+    );
+
+    expect(tradeRes.status).toBe(403);
+    const tradePayload = (await tradeRes.json()) as { error: string };
+    expect(tradePayload.error).toContain('classroom game has ended');
+  });
+
+  it('restarts a classroom game with the same student credentials', async () => {
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+    const authRoute = await import('../app/api/stock-game/auth/route');
+    const tradesRoute = await import('../app/api/stock-game/trades/route');
+    const portfolioRoute =
+      await import('../app/api/stock-game/portfolio/route');
+
+    const createRes = await studentsRoute.POST(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          username: 'student_restart1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(createRes.status).toBe(201);
+
+    const loginBeforeRestart = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_restart1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(loginBeforeRestart.status).toBe(200);
+    const loginBeforePayload = (await loginBeforeRestart.json()) as {
+      token: string;
+    };
+
+    const firstTrade = await tradesRoute.POST(
+      new Request('http://localhost/api/stock-game/trades', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: loginBeforePayload.token,
+          symbol: 'AAPL',
+          side: 'buy',
+          shares: 2,
+        }),
+      }),
+    );
+    expect(firstTrade.status).toBe(201);
+
+    expireClassroom(CLASSROOM);
+
+    const blockedLogin = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_restart1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(blockedLogin.status).toBe(403);
+
+    const restartRes = await studentsRoute.PATCH(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          action: 'restart-game',
+        }),
+      }),
+    );
+    expect(restartRes.status).toBe(200);
+    const restartPayload = (await restartRes.json()) as {
+      action: string;
+      studentCount: number;
+    };
+    expect(restartPayload.action).toBe('restart-game');
+    expect(restartPayload.studentCount).toBeGreaterThanOrEqual(1);
+
+    const loginAfterRestart = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_restart1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+    expect(loginAfterRestart.status).toBe(200);
+    const loginAfterPayload = (await loginAfterRestart.json()) as {
+      token: string;
+    };
+
+    const portfolioRes = await portfolioRoute.GET(
+      new Request(
+        `http://localhost/api/stock-game/portfolio?token=${loginAfterPayload.token}`,
+      ),
+    );
+    expect(portfolioRes.status).toBe(200);
+    const portfolio = (await portfolioRes.json()) as {
+      cash: number;
+      positions: Record<string, number>;
+      classroomActive: boolean;
+    };
+    expect(portfolio.cash).toBe(10000);
+    expect(Object.keys(portfolio.positions)).toHaveLength(0);
+    expect(portfolio.classroomActive).toBe(true);
   });
 });

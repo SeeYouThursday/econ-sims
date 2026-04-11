@@ -69,6 +69,7 @@ async function getAuditWithTeacherResync(
         teacherUserId,
         title: classroom.title,
         startingCash: classroom.startingCash,
+        durationDays: classroom.durationDays,
       });
 
       return getTeacherAudit(auditInput);
@@ -93,6 +94,7 @@ export async function POST(request: Request) {
         teacherUserId,
         title: classroom.title,
         startingCash: classroom.startingCash,
+        durationDays: classroom.durationDays,
       });
     }
 

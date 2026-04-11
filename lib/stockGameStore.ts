@@ -10,6 +10,7 @@ type Classroom = {
   ownerTeacherId?: string;
   title?: string;
   startingCash?: number;
+  durationDays?: number;
   createdAt: string;
 };
 
@@ -65,6 +66,8 @@ type PortfolioSnapshot = {
   studentId: string;
   classroomCode: string;
   username: string;
+  classroomActive: boolean;
+  classroomEndsAt: string | null;
   cash: number;
   positions: Record<string, number>;
   holdingsValue: number;
@@ -178,7 +181,7 @@ type ManageClassroomStudentsInput = {
   classroomCode: string;
   teacherPasscode?: string;
   teacherUserId?: string;
-  action: 'reset-all';
+  action: 'reset-all' | 'restart-game';
 };
 
 export class StockGameError extends Error {
@@ -198,6 +201,7 @@ declare global {
 }
 
 const STARTING_CASH = 10000;
+const DEFAULT_CLASSROOM_DURATION_DAYS = 30;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LEADERBOARD_TTL_MS = 60 * 1000;
 const TRADE_RETENTION_DAYS = Number(
@@ -588,16 +592,46 @@ function getClassStartingCash(classroom?: Classroom) {
   return classroom?.startingCash ?? STARTING_CASH;
 }
 
+function getClassDurationDays(classroom?: Classroom) {
+  const durationDays = classroom?.durationDays;
+  if (typeof durationDays !== 'number' || !Number.isFinite(durationDays)) {
+    return DEFAULT_CLASSROOM_DURATION_DAYS;
+  }
+
+  return Math.max(1, Math.trunc(durationDays));
+}
+
+function getClassroomEndsAtMs(classroom: Classroom) {
+  const createdAtMs = Date.parse(classroom.createdAt);
+  if (!Number.isFinite(createdAtMs)) {
+    return null;
+  }
+
+  return createdAtMs + getClassDurationDays(classroom) * 24 * 60 * 60 * 1000;
+}
+
+function assertClassroomIsActive(classroom: Classroom) {
+  const endsAtMs = getClassroomEndsAtMs(classroom);
+  if (endsAtMs !== null && endsAtMs <= Date.now()) {
+    throw new StockGameError(
+      'This classroom game has ended. Ask your teacher for help.',
+      403,
+    );
+  }
+}
+
 export async function ensureTeacherClassroom({
   classroomCode,
   teacherUserId,
   title,
   startingCash,
+  durationDays,
 }: {
   classroomCode: string;
   teacherUserId: string;
   title?: string;
   startingCash?: number;
+  durationDays?: number;
 }) {
   const state = await loadState();
   const normalizedCode = validateClassroomCode(classroomCode);
@@ -616,6 +650,7 @@ export async function ensureTeacherClassroom({
       ownerTeacherId: teacherUserId,
       title: title ?? existing.title,
       startingCash: startingCash ?? getClassStartingCash(existing),
+      durationDays: durationDays ?? getClassDurationDays(existing),
     };
     await saveState(state);
     return state.classrooms[normalizedCode];
@@ -626,6 +661,7 @@ export async function ensureTeacherClassroom({
     ownerTeacherId: teacherUserId,
     title,
     startingCash: startingCash ?? STARTING_CASH,
+    durationDays: durationDays ?? DEFAULT_CLASSROOM_DURATION_DAYS,
     createdAt: nowIso(),
   };
   await saveState(state);
@@ -660,6 +696,7 @@ function getPortfolioSnapshot(
 ): PortfolioSnapshot {
   const classroom = state.classrooms[student.classroomCode];
   const classStartingCash = getClassStartingCash(classroom);
+  const classroomEndsAtMs = classroom ? getClassroomEndsAtMs(classroom) : null;
   const holdingsValue = Object.entries(student.positions).reduce(
     (sum, [symbol, shares]) => {
       return (
@@ -677,6 +714,12 @@ function getPortfolioSnapshot(
     studentId: student.id,
     classroomCode: student.classroomCode,
     username: student.username,
+    classroomActive:
+      classroomEndsAtMs === null || classroomEndsAtMs > Date.now(),
+    classroomEndsAt:
+      classroomEndsAtMs === null
+        ? null
+        : new Date(classroomEndsAtMs).toISOString(),
     cash: Number(student.cash.toFixed(2)),
     positions: { ...student.positions },
     holdingsValue: Number(holdingsValue.toFixed(2)),
@@ -851,6 +894,13 @@ export async function loginStudent(input: LoginInput) {
     throw new StockGameError('Invalid username or passcode.', 401);
   }
 
+  const classroom = state.classrooms[classroomCode];
+  if (!classroom) {
+    throw new StockGameError('Classroom was not found.', 404);
+  }
+
+  assertClassroomIsActive(classroom);
+
   if (!isStudentActive(student)) {
     throw new StockGameError('Student account is inactive.', 403);
   }
@@ -886,6 +936,13 @@ export async function placeTrade(input: PlaceTradeInput) {
   if (!student) {
     throw new StockGameError('Student account was not found.', 404);
   }
+
+  const classroom = state.classrooms[session.classroomCode];
+  if (!classroom) {
+    throw new StockGameError('Classroom was not found.', 404);
+  }
+
+  assertClassroomIsActive(classroom);
 
   const symbol = normalizeSymbol(input.symbol);
   if (!/^[A-Z.\-]{1,10}$/.test(symbol)) {
@@ -1270,7 +1327,7 @@ export async function manageClassroomStudents(
     input.teacherUserId,
   );
 
-  if (input.action !== 'reset-all') {
+  if (input.action !== 'reset-all' && input.action !== 'restart-game') {
     throw new StockGameError('Unsupported classroom action.');
   }
 
@@ -1299,6 +1356,11 @@ export async function manageClassroomStudents(
     (trade) => trade.classroomCode !== classroomCode,
   );
 
+  if (input.action === 'restart-game') {
+    classroom.createdAt = nowIso();
+    delete state.marketPricesByClass[classroomCode];
+  }
+
   await saveState(state);
   await clearCachedLeaderboard(classroomCode);
 
@@ -1307,6 +1369,8 @@ export async function manageClassroomStudents(
     action: input.action,
     studentCount: studentIdsToReset.length,
     startingCash: classStartingCash,
+    restartedAt:
+      input.action === 'restart-game' ? classroom.createdAt : undefined,
     storage: isRedisConfigured() ? 'redis' : 'memory',
   };
 }

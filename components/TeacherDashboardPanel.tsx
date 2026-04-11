@@ -34,6 +34,7 @@ function isTeacherClassroom(value: unknown): value is TeacherClassroom {
     typeof candidate.code === 'string' &&
     typeof candidate.title === 'string' &&
     typeof candidate.startingCash === 'number' &&
+    typeof candidate.durationDays === 'number' &&
     typeof candidate.createdAt === 'string'
   );
 }
@@ -80,6 +81,7 @@ export default function TeacherDashboardPanel({
   const [updatingClassroomSettings, setUpdatingClassroomSettings] =
     useState(false);
   const [newClassStartingCash, setNewClassStartingCash] = useState('10000');
+  const [newClassDurationDays, setNewClassDurationDays] = useState('30');
   const [selectedStartingCash, setSelectedStartingCash] = useState('10000');
   const [showGeneratedPasscode, setShowGeneratedPasscode] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -222,6 +224,16 @@ export default function TeacherDashboardPanel({
       return;
     }
 
+    const parsedDurationDays = Math.trunc(Number(newClassDurationDays));
+    if (
+      !Number.isFinite(parsedDurationDays) ||
+      parsedDurationDays < 1 ||
+      parsedDurationDays > 365
+    ) {
+      setError('Game duration must be between 1 and 365 days.');
+      return;
+    }
+
     setCreatingClassroom(true);
     setError(null);
 
@@ -229,7 +241,11 @@ export default function TeacherDashboardPanel({
       const response = await fetch('/api/teacher/classrooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, startingCash: parsedStartingCash }),
+        body: JSON.stringify({
+          title,
+          startingCash: parsedStartingCash,
+          durationDays: parsedDurationDays,
+        }),
       });
 
       const payload = (await response.json().catch(() => null)) as unknown;
@@ -262,6 +278,7 @@ export default function TeacherDashboardPanel({
       }));
       setTitle('');
       setNewClassStartingCash('10000');
+      setNewClassDurationDays('30');
     } catch {
       setError('Unable to create classroom right now.');
     } finally {
@@ -495,6 +512,61 @@ export default function TeacherDashboardPanel({
       setStudentMessage('Reset all student portfolios for this classroom.');
     } catch {
       setError('Unable to reset the classroom right now.');
+    } finally {
+      setStudentActionKey(null);
+    }
+  };
+
+  const restartClassroomGame = async (skipConfirm = false) => {
+    if (!selectedClassroomCode) {
+      setError('Select a classroom first.');
+      return;
+    }
+
+    if (!skipConfirm) {
+      setConfirmDialog({
+        title: 'Restart Classroom Game?',
+        message:
+          'This keeps the same classroom code and student logins, resets portfolios/trade history, clears sessions, and restarts the game clock.',
+        confirmLabel: 'Restart Game',
+        tone: 'danger',
+        onConfirm: () => {
+          void restartClassroomGame(true);
+        },
+      });
+      return;
+    }
+
+    setStudentActionKey(`${selectedClassroomCode}:restart-game`);
+    setError(null);
+    setStudentMessage(null);
+
+    try {
+      const response = await fetch('/api/stock-game/students', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          classroomCode: selectedClassroomCode,
+          action: 'restart-game',
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as unknown;
+
+      if (!response.ok) {
+        setError(
+          getApiErrorMessage(payload) ??
+            'Unable to restart the classroom game.',
+        );
+        return;
+      }
+
+      await loadClassroomRoster(selectedClassroomCode);
+      await loadClassroomAudit(selectedClassroomCode);
+      setStudentMessage(
+        'Classroom game restarted. Students can use the same aliases and passcodes.',
+      );
+    } catch {
+      setError('Unable to restart the classroom game right now.');
     } finally {
       setStudentActionKey(null);
     }
@@ -844,9 +916,11 @@ export default function TeacherDashboardPanel({
         <CreateClassroomCard
           title={title}
           newClassStartingCash={newClassStartingCash}
+          newClassDurationDays={newClassDurationDays}
           creatingClassroom={creatingClassroom}
           onTitleChange={setTitle}
           onStartingCashChange={setNewClassStartingCash}
+          onDurationDaysChange={setNewClassDurationDays}
           onCreateClassroom={() => {
             void createClassroom();
           }}
@@ -871,6 +945,9 @@ export default function TeacherDashboardPanel({
           }}
           onResetAll={() => {
             void resetAllStudentsToStartingCash();
+          }}
+          onRestartGame={() => {
+            void restartClassroomGame();
           }}
         />
       )}

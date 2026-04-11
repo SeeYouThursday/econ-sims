@@ -2,6 +2,7 @@ export type TeacherClassroom = {
   code: string;
   title: string;
   startingCash: number;
+  durationDays: number;
   createdAt: string;
 };
 

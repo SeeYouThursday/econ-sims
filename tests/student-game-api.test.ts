@@ -19,6 +19,8 @@ describe('student-game api client', () => {
         studentId: 'student_1',
         classroomCode: 'ABC123',
         username: 'student_01',
+        classroomActive: true,
+        classroomEndsAt: '2026-05-01T00:00:00.000Z',
         cash: 9000,
         positions: { AAPL: 10 },
         holdingsValue: 1000,
@@ -31,6 +33,7 @@ describe('student-game api client', () => {
     const result = await fetchPortfolio('token_1');
 
     expect(result.studentId).toBe('student_1');
+    expect(result.classroomActive).toBe(true);
     expect(result.totalValue).toBe(10000);
   });
 
@@ -68,6 +71,8 @@ describe('student-game api client', () => {
           studentId: 'student_1',
           classroomCode: 'ABC123',
           username: 'student_01',
+          classroomActive: true,
+          classroomEndsAt: '2026-05-01T00:00:00.000Z',
           cash: 9000,
           positions: { AAPL: 10 },
           holdingsValue: 1000,
