@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import { TeacherAuthError, requireTeacherAuth } from '@/lib/clerk';
-import {
-  assertTeacherOwnsClassroom,
-  TeacherAccessError,
-} from '@/lib/teacherStore';
+import { assertTeacherOwnsClassroom } from '@/lib/teacherStore';
 import {
   deleteStudentAlias,
   setStudentAliasActive,
@@ -157,16 +154,20 @@ function escapeCsv(value: string | number | boolean | null | undefined) {
   }
 
   const stringValue = String(value);
+  // Prevent spreadsheet formula execution when opening CSV in Excel/Sheets.
+  const sanitized = /^[\s\t]*[=+\-@]/.test(stringValue)
+    ? `'${stringValue}`
+    : stringValue;
   if (
-    stringValue.includes(',') ||
-    stringValue.includes('"') ||
-    stringValue.includes('\n') ||
-    stringValue.includes('\r')
+    sanitized.includes(',') ||
+    sanitized.includes('"') ||
+    sanitized.includes('\n') ||
+    sanitized.includes('\r')
   ) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
+    return `"${sanitized.replace(/"/g, '""')}"`;
   }
 
-  return stringValue;
+  return sanitized;
 }
 
 function buildStudentsCsv({
@@ -189,6 +190,17 @@ function buildStudentsCsv({
   return [header, ...rows]
     .map((row) => row.map((cell) => escapeCsv(cell)).join(','))
     .join('\n');
+}
+
+export function buildStudentsCsvFilename(classroomCode: string) {
+  const normalized = classroomCode.trim().toLowerCase();
+  const isSafeClassroomCode = /^[a-z0-9_-]{1,32}$/.test(normalized);
+
+  if (!isSafeClassroomCode) {
+    return 'student-credentials.csv';
+  }
+
+  return `${normalized}-student-credentials.csv`;
 }
 
 async function runWithTeacherClassroomResync<T>({
@@ -350,10 +362,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(student, { status: 201 });
   } catch (error) {
-    if (
-      error instanceof TeacherAuthError ||
-      error instanceof TeacherAccessError
-    ) {
+    if (error instanceof TeacherAuthError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },
@@ -452,10 +461,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json(result);
   } catch (error) {
-    if (
-      error instanceof TeacherAuthError ||
-      error instanceof TeacherAccessError
-    ) {
+    if (error instanceof TeacherAuthError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },
@@ -545,6 +551,7 @@ export async function GET(request: Request) {
         classroomCode,
         students: rosterWithSecrets.students,
       });
+      const filename = buildStudentsCsvFilename(classroomCode);
       const generatedAt = new Date().toISOString();
 
       console.info('[stock-game][students] export', {
@@ -559,7 +566,7 @@ export async function GET(request: Request) {
         status: 200,
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="${classroomCode.toLowerCase()}-student-credentials.csv"`,
+          'Content-Disposition': `attachment; filename="${filename}"`,
           'Cache-Control': 'no-store',
         },
       });
@@ -585,10 +592,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(roster);
   } catch (error) {
-    if (
-      error instanceof TeacherAuthError ||
-      error instanceof TeacherAccessError
-    ) {
+    if (error instanceof TeacherAuthError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },
@@ -679,10 +683,7 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json(result);
   } catch (error) {
-    if (
-      error instanceof TeacherAuthError ||
-      error instanceof TeacherAccessError
-    ) {
+    if (error instanceof TeacherAuthError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },

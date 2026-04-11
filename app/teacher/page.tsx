@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { isClerkConfigured } from '@/lib/clerk';
 import TeacherDashboardPanel from '@/components/TeacherDashboardPanel';
-import { TeacherAccessError, listTeacherClassrooms } from '@/lib/teacherStore';
+import { listTeacherClassrooms } from '@/lib/teacherStore';
 
 export default async function TeacherPage() {
   if (!isClerkConfigured()) {
@@ -30,45 +30,7 @@ export default async function TeacherPage() {
     redirect('/sign-in?redirect_url=/teacher');
   }
 
-  let classrooms;
-
-  try {
-    classrooms = await listTeacherClassrooms(userId);
-  } catch (error) {
-    if (error instanceof TeacherAccessError) {
-      return (
-        <main className="min-h-screen bg-slate-100 px-4 py-10 sm:px-6">
-          <div className="mx-auto max-w-3xl rounded-4xl border border-slate-200 bg-white p-8 shadow-xl">
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-slate-500">
-              Teacher dashboard
-            </p>
-            <h1 className="mt-4 text-3xl font-black text-slate-900">
-              Invitation required
-            </h1>
-            <p className="mt-4 text-sm leading-7 text-slate-600">
-              {error.message}
-            </p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              <Link
-                href="/sign-in"
-                className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-center text-sm font-black uppercase tracking-[0.2em] text-slate-900 transition hover:border-slate-300"
-              >
-                Back to sign in
-              </Link>
-              <Link
-                href="/"
-                className="rounded-3xl border border-slate-200 bg-white px-5 py-4 text-center text-sm font-black uppercase tracking-[0.2em] text-slate-700 transition hover:border-slate-300"
-              >
-                Return home
-              </Link>
-            </div>
-          </div>
-        </main>
-      );
-    }
-
-    throw error;
-  }
+  const classrooms = await listTeacherClassrooms(userId);
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-10 sm:px-6">

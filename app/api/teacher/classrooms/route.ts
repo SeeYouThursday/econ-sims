@@ -3,7 +3,6 @@ import { TeacherAuthError, requireTeacherAuth } from '@/lib/clerk';
 import {
   createTeacherClassroom,
   listTeacherClassrooms,
-  TeacherAccessError,
   updateTeacherClassroomStartingCash,
 } from '@/lib/teacherStore';
 import { ensureTeacherClassroom } from '@/lib/stockGameStore';
@@ -31,10 +30,7 @@ export async function GET() {
     const classrooms = await listTeacherClassrooms(teacherUserId);
     return NextResponse.json(classrooms);
   } catch (error) {
-    if (
-      error instanceof TeacherAuthError ||
-      error instanceof TeacherAccessError
-    ) {
+    if (error instanceof TeacherAuthError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },
@@ -75,10 +71,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(classroom, { status: 201 });
   } catch (error) {
-    if (
-      error instanceof TeacherAuthError ||
-      error instanceof TeacherAccessError
-    ) {
+    if (error instanceof TeacherAuthError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },
@@ -121,10 +114,7 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json(classroom);
   } catch (error) {
-    if (
-      error instanceof TeacherAuthError ||
-      error instanceof TeacherAccessError
-    ) {
+    if (error instanceof TeacherAuthError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },

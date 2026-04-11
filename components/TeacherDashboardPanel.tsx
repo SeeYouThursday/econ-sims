@@ -10,6 +10,10 @@ import {
   type GeneratedCredential,
   writeAndPrintCredentialCards,
 } from '@/lib/teacherCredentialExports';
+import {
+  parseCredentialCsv,
+  sanitizeClassroomCodeForFilename,
+} from '@/lib/studentCredentialCsv';
 import { ClassroomListCard } from '@/components/teacher-dashboard/ClassroomListCard';
 import { ClassroomMetricsCard } from '@/components/teacher-dashboard/ClassroomMetricsCard';
 import { ConfirmDialog } from '@/components/teacher-dashboard/ConfirmDialog';
@@ -616,8 +620,11 @@ export default function TeacherDashboardPanel({
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       const dateStamp = new Date().toISOString().slice(0, 10);
+      const safeClassroomCode = sanitizeClassroomCodeForFilename(
+        selectedClassroomCode,
+      );
       link.href = url;
-      link.download = `${selectedClassroomCode.toLowerCase()}-student-credentials-${dateStamp}.csv`;
+      link.download = `${safeClassroomCode}-student-credentials-${dateStamp}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -631,38 +638,6 @@ export default function TeacherDashboardPanel({
     } finally {
       setExportingCredentials(false);
     }
-  };
-
-  const parseCredentialCsv = (csv: string): GeneratedCredential[] => {
-    const rows = csv
-      .split(/\r?\n/)
-      .map((row) => row.trim())
-      .filter(Boolean);
-
-    if (rows.length < 2) {
-      return [];
-    }
-
-    const [header, ...dataRows] = rows;
-    const columns = header.split(',');
-    const aliasIndex = columns.indexOf('alias');
-    const passcodeIndex = columns.indexOf('passcode');
-
-    if (aliasIndex === -1 || passcodeIndex === -1) {
-      return [];
-    }
-
-    return dataRows
-      .map((row) => {
-        const cells = row.split(',');
-        const alias = cells[aliasIndex]?.trim() ?? '';
-        const passcode = cells[passcodeIndex]?.trim() ?? '';
-        return {
-          alias,
-          passcode,
-        };
-      })
-      .filter((entry) => entry.alias.length > 0 && entry.passcode.length > 0);
   };
 
   const printRosterCredentialCards = async (skipConfirm = false) => {
@@ -752,8 +727,9 @@ export default function TeacherDashboardPanel({
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     const dateStamp = new Date().toISOString().slice(0, 10);
+    const safeClassroomCode = sanitizeClassroomCodeForFilename(classroomCode);
     link.href = url;
-    link.download = `${classroomCode.toLowerCase()}-new-student-credentials-${dateStamp}.csv`;
+    link.download = `${safeClassroomCode}-new-student-credentials-${dateStamp}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();

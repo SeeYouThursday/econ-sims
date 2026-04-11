@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import { TeacherAuthError, requireTeacherAuth } from '@/lib/clerk';
-import {
-  assertTeacherOwnsClassroom,
-  TeacherAccessError,
-} from '@/lib/teacherStore';
+import { assertTeacherOwnsClassroom } from '@/lib/teacherStore';
 import {
   ensureTeacherClassroom,
   getTeacherAudit,
@@ -129,10 +126,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(audit);
   } catch (error) {
-    if (
-      error instanceof TeacherAuthError ||
-      error instanceof TeacherAccessError
-    ) {
+    if (error instanceof TeacherAuthError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },

@@ -154,7 +154,7 @@ describe('teacher classroom routes', () => {
         body: JSON.stringify({
           classroomCode: classroom.code,
           username: 'student_a1',
-          studentPasscode: 'pass1234',
+          studentPasscode: '=SUM(1,1)',
         }),
       }),
     );
@@ -197,7 +197,9 @@ describe('teacher classroom routes', () => {
     expect(exportRes.headers.get('content-type')).toContain('text/csv');
     const csvBody = await exportRes.text();
     expect(csvBody).toContain('classroomCode,alias,passcode,active,createdAt');
-    expect(csvBody).toContain(`${classroom.code},student_a1,pass1234,true,`);
+    expect(csvBody).toContain(
+      `${classroom.code},student_a1,"'=SUM(1,1)",true,`,
+    );
 
     const auditRoute = await import('../app/api/stock-game/audit/route');
     const auditRes = await auditRoute.POST(

@@ -26,18 +26,6 @@ declare global {
   var __econSimsTeacherStore: TeacherStoreState | undefined;
 }
 
-const INVITE_REQUIRED_MESSAGE =
-  'Teacher access requires an invitation. Please sign up using your invitation link.';
-
-export class TeacherAccessError extends Error {
-  status: number;
-
-  constructor(message = INVITE_REQUIRED_MESSAGE, status = 403) {
-    super(message);
-    this.status = status;
-  }
-}
-
 function nowIso() {
   return new Date().toISOString();
 }
