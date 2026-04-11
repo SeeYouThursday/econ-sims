@@ -7,7 +7,14 @@ vi.mock('@/components/RevFedGame', () => ({
 }));
 
 vi.mock('next/link', () => ({
-  default: ({ href, children, ...rest }: any) => (
+  default: ({
+    href,
+    children,
+    ...rest
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string;
+    children?: React.ReactNode;
+  }) => (
     <a href={href} {...rest}>
       {children}
     </a>
@@ -16,8 +23,8 @@ vi.mock('next/link', () => ({
 
 describe('Fed simulator page', () => {
   it('renders the fed game component inside a main element', async () => {
-    const module = await import('../app/fed-simulator/page');
-    const FedGamePage = module.default;
+    const fedPageModule = await import('../app/fed-simulator/page');
+    const FedGamePage = fedPageModule.default;
 
     const html = renderToStaticMarkup(<FedGamePage />);
 

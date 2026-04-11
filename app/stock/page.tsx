@@ -1,11 +1,9 @@
-import StockGame from '@/components/StockGame';
+import StudentGameExperience from '@/components/student-game/StudentGameExperience';
 
 export default function StockPage() {
   return (
-    <main className="min-h-screen bg-slate-100 px-6 py-10">
-      <div className="mx-auto max-w-6xl">
-        <StockGame />
-      </div>
+    <main className="min-h-screen bg-slate-100 px-4 py-10 sm:px-6">
+      <StudentGameExperience />
     </main>
   );
 }

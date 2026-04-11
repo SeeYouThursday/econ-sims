@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/scripts
 
 # next.js
 /.next/
@@ -50,3 +51,4 @@ next-env.d.ts
 .vscode/
 .idea/
 *.log
+

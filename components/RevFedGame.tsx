@@ -1,6 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import {
   LineChart,
   Line,
@@ -58,6 +63,11 @@ export default function FedGame() {
   const [inflation, setInflation] = useState(2.0);
   const [unemployment, setUnemployment] = useState(5.0);
   const [interestRate, setInterestRate] = useState(4.0);
+  const isChartReady = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   // History now correctly tracks the rate for every quarter
   const [history, setHistory] = useState<EconomicData[]>([
@@ -323,75 +333,79 @@ export default function FedGame() {
             />
 
             <div className="flex-1 min-w-0 min-h-0 relative">
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-                minWidth={3}
-                minHeight={1}
-              >
-                <LineChart
-                  data={history}
-                  margin={{ top: 10, right: 60, left: -25, bottom: 0 }}
+              {isChartReady ? (
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={3}
+                  minHeight={1}
                 >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#e2e8f0"
-                  />
-                  <XAxis dataKey="q" hide />
-                  <YAxis
-                    domain={[0, 10]}
-                    tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <ReferenceLine
-                    y={2}
-                    stroke="#ef4444"
-                    strokeDasharray="5 5"
-                    strokeOpacity={0.5}
-                  />
-                  <ReferenceLine
-                    y={5}
-                    stroke="#2563eb"
-                    strokeDasharray="5 5"
-                    strokeOpacity={0.5}
-                  />
+                  <LineChart
+                    data={history}
+                    margin={{ top: 10, right: 60, left: -25, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#e2e8f0"
+                    />
+                    <XAxis dataKey="q" hide />
+                    <YAxis
+                      domain={[0, 10]}
+                      tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <ReferenceLine
+                      y={2}
+                      stroke="#ef4444"
+                      strokeDasharray="5 5"
+                      strokeOpacity={0.5}
+                    />
+                    <ReferenceLine
+                      y={5}
+                      stroke="#2563eb"
+                      strokeDasharray="5 5"
+                      strokeOpacity={0.5}
+                    />
 
-                  <Line
-                    type="monotone"
-                    dataKey="inf"
-                    stroke="#ef4444"
-                    strokeWidth={5}
-                    dot={false}
-                    isAnimationActive={false}
-                    label={
-                      <CustomizedLabel
-                        color="#ef4444"
-                        text="PRICES"
-                        lastIndex={history.length - 1}
-                        tooltip="When prices for everyday things go up over time. Target: 2.0%"
-                      />
-                    }
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="unp"
-                    stroke="#2563eb"
-                    strokeWidth={5}
-                    dot={false}
-                    isAnimationActive={false}
-                    label={
-                      <CustomizedLabel
-                        color="#2563eb"
-                        text="JOBS"
-                        lastIndex={history.length - 1}
-                        tooltip="The share of people who want a job but can't find one. Target: 5.0%"
-                      />
-                    }
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+                    <Line
+                      type="monotone"
+                      dataKey="inf"
+                      stroke="#ef4444"
+                      strokeWidth={5}
+                      dot={false}
+                      isAnimationActive={false}
+                      label={
+                        <CustomizedLabel
+                          color="#ef4444"
+                          text="PRICES"
+                          lastIndex={history.length - 1}
+                          tooltip="When prices for everyday things go up over time. Target: 2.0%"
+                        />
+                      }
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="unp"
+                      stroke="#2563eb"
+                      strokeWidth={5}
+                      dot={false}
+                      isAnimationActive={false}
+                      label={
+                        <CustomizedLabel
+                          color="#2563eb"
+                          text="JOBS"
+                          lastIndex={history.length - 1}
+                          tooltip="The share of people who want a job but can't find one. Target: 5.0%"
+                        />
+                      }
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full w-full rounded-3xl bg-slate-100" />
+              )}
             </div>
           </div>
 

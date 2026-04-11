@@ -4,6 +4,18 @@ export const runtime = 'nodejs';
 
 const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
 
+function redactQueryParams(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.has('apiKey')) {
+      parsed.searchParams.set('apiKey', '[REDACTED]');
+    }
+    return parsed.toString();
+  } catch {
+    return '[UNPARSEABLE_URL]';
+  }
+}
+
 function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -48,8 +60,16 @@ export async function GET(request: NextRequest) {
 
   if (!polygonRes.ok) {
     const message = await polygonRes.text();
+    console.error('Polygon API request failed', {
+      status: polygonRes.status,
+      statusText: polygonRes.statusText,
+      url: redactQueryParams(polygonUrl),
+      // Keep response body only in server logs for debugging.
+      body: message,
+    });
+
     return NextResponse.json(
-      { error: 'Polygon API error', details: message },
+      { error: 'Polygon API error' },
       { status: polygonRes.status },
     );
   }

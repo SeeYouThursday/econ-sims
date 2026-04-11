@@ -1,0 +1,134 @@
+import { NextResponse } from 'next/server';
+import {
+  listStudentTrades,
+  placeTrade,
+  StockGameError,
+} from '@/lib/stockGameStore';
+
+export const runtime = 'nodejs';
+
+type TradeBody = {
+  token?: string;
+  symbol?: string;
+  side?: 'buy' | 'sell';
+  shares?: number;
+};
+
+function normalizeSymbol(symbol: string) {
+  return symbol.trim().toUpperCase();
+}
+
+function formatDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+async function getServerExecutionPrice(symbolInput: string) {
+  const apiKey = process.env.POLYGON_API_KEY;
+  if (!apiKey) {
+    throw new StockGameError('Market quote service is unavailable.', 503);
+  }
+
+  const symbol = normalizeSymbol(symbolInput);
+  if (!/^[A-Z.\-]{1,10}$/.test(symbol)) {
+    throw new StockGameError('Symbol format is invalid.');
+  }
+
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(to.getDate() - 14);
+
+  const polygonUrl = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(
+    symbol,
+  )}/range/1/day/${formatDate(from)}/${formatDate(to)}?adjusted=true&sort=asc&limit=60&apiKey=${apiKey}`;
+
+  const polygonRes = await fetch(polygonUrl, {
+    next: { revalidate: 300 },
+  });
+
+  if (!polygonRes.ok) {
+    throw new StockGameError('Unable to load latest market quote.', 502);
+  }
+
+  const polygonJson = (await polygonRes.json()) as {
+    results?: Array<{ c?: number; t?: number }>;
+  };
+  const latest = Array.isArray(polygonJson.results)
+    ? polygonJson.results[polygonJson.results.length - 1]
+    : null;
+
+  if (!latest || typeof latest.c !== 'number' || latest.c <= 0) {
+    throw new StockGameError(
+      'No recent market quote available for symbol.',
+      404,
+    );
+  }
+
+  const quoteAsOf =
+    typeof latest.t === 'number'
+      ? new Date(latest.t).toISOString().slice(0, 10)
+      : formatDate(to);
+
+  return {
+    price: Number(latest.c.toFixed(2)),
+    quoteAsOf,
+  };
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as TradeBody;
+    const execution = await getServerExecutionPrice(body.symbol ?? '');
+
+    const result = await placeTrade({
+      token: body.token ?? '',
+      symbol: body.symbol ?? '',
+      side: body.side ?? 'buy',
+      shares: Number(body.shares),
+      price: execution.price,
+      quoteAsOf: execution.quoteAsOf,
+    });
+
+    return NextResponse.json(
+      {
+        ...result,
+        quoteAsOf: execution.quoteAsOf,
+      },
+      { status: 201 },
+    );
+  } catch (error) {
+    if (error instanceof StockGameError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Unexpected error while placing trade.' },
+      { status: 500 },
+    );
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token') ?? '';
+    const limit = Number(url.searchParams.get('limit') ?? '20');
+
+    const result = await listStudentTrades(token, limit);
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof StockGameError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Unexpected error while loading trade history.' },
+      { status: 500 },
+    );
+  }
+}
