@@ -262,6 +262,7 @@ export function ManageStudentsPanel({
                           }
                           disabled={studentActionKey !== null}
                           title={`Reset ${student.username}`}
+                          aria-label={`Reset ${student.username}`}
                           className="rounded-full border border-slate-300 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
                         >
                           R
@@ -275,6 +276,8 @@ export function ManageStudentsPanel({
                             )
                           }
                           disabled={studentActionKey !== null}
+                          title={`${student.isActive ? 'Deactivate' : 'Activate'} ${student.username}`}
+                          aria-label={`${student.isActive ? 'Deactivate' : 'Activate'} ${student.username}`}
                           className={`rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase transition ${
                             student.isActive
                               ? 'border-slate-300 text-slate-700 hover:border-slate-400'
@@ -289,6 +292,8 @@ export function ManageStudentsPanel({
                             onRunStudentAction(student.username, 'delete')
                           }
                           disabled={studentActionKey !== null}
+                          title={`Delete ${student.username}`}
+                          aria-label={`Delete ${student.username}`}
                           className="rounded-full border border-rose-300 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-700 transition hover:border-rose-400 disabled:opacity-60"
                         >
                           X
