@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'crypto';
+import { randomInt, randomUUID } from 'crypto';
 import { getNeonSql, isNeonConfigured } from './neon';
 
 type TeacherRecord = {
@@ -17,17 +17,9 @@ type TeacherClassroomRecord = {
   createdAt: string;
 };
 
-type TeacherInvitationRecord = {
-  token: string;
-  usedByClerkUserId: string | null;
-  usedAt: string | null;
-  createdAt: string;
-};
-
 type TeacherStoreState = {
   teachersByClerkUserId: Record<string, TeacherRecord>;
   classroomsByCode: Record<string, TeacherClassroomRecord>;
-  invitationsByToken: Record<string, TeacherInvitationRecord>;
 };
 
 declare global {
@@ -54,7 +46,6 @@ function createEmptyTeacherStore(): TeacherStoreState {
   return {
     teachersByClerkUserId: {},
     classroomsByCode: {},
-    invitationsByToken: {},
   };
 }
 
@@ -113,7 +104,7 @@ function generateClassroomCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let result = '';
   for (let index = 0; index < 6; index += 1) {
-    const randomIndex = Math.floor(Math.random() * alphabet.length);
+    const randomIndex = randomInt(0, alphabet.length);
     result += alphabet[randomIndex];
   }
   return result;
@@ -163,15 +154,6 @@ async function ensureTeacherTables() {
   await sql`
     ALTER TABLE stock_game_classrooms
     ADD COLUMN IF NOT EXISTS duration_days INTEGER NOT NULL DEFAULT 30
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS stock_game_teacher_invitations (
-      token TEXT PRIMARY KEY,
-      used_by_clerk_user_id TEXT NULL,
-      used_at TIMESTAMPTZ NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
   `;
 }
 
@@ -251,112 +233,6 @@ async function generateUniqueClassroomCode() {
   }
 
   throw new Error('Unable to generate a unique classroom code.');
-}
-
-export async function createTeacherInvitation(): Promise<{ token: string }> {
-  const token = randomBytes(24).toString('hex');
-
-  if (!isNeonConfigured()) {
-    const store = getMemoryTeacherStore();
-    store.invitationsByToken[token] = {
-      token,
-      usedByClerkUserId: null,
-      usedAt: null,
-      createdAt: nowIso(),
-    };
-    return { token };
-  }
-
-  await ensureTeacherTables();
-  const sql = getNeonSql();
-  await sql`
-    INSERT INTO stock_game_teacher_invitations (token)
-    VALUES (${token})
-  `;
-  return { token };
-}
-
-export async function validateTeacherInvitation(
-  token: string,
-): Promise<{ valid: boolean; reason?: string }> {
-  if (!token || typeof token !== 'string') {
-    return { valid: false, reason: 'Invitation not found.' };
-  }
-
-  if (!isNeonConfigured()) {
-    const store = getMemoryTeacherStore();
-    const invitation = store.invitationsByToken[token];
-    if (!invitation) return { valid: false, reason: 'Invitation not found.' };
-    if (invitation.usedByClerkUserId)
-      return { valid: false, reason: 'This invitation has already been used.' };
-    return { valid: true };
-  }
-
-  await ensureTeacherTables();
-  const sql = getNeonSql();
-  const rows = await sql`
-    SELECT token, used_by_clerk_user_id
-    FROM stock_game_teacher_invitations
-    WHERE token = ${token}
-    LIMIT 1
-  `;
-
-  const row = toObjectRows(rows)[0];
-  if (!row) return { valid: false, reason: 'Invitation not found.' };
-  if (row.used_by_clerk_user_id)
-    return { valid: false, reason: 'This invitation has already been used.' };
-  return { valid: true };
-}
-
-export async function redeemTeacherInvitation(
-  token: string,
-  clerkUserId: string,
-): Promise<void> {
-  if (!token || typeof token !== 'string') {
-    throw new Error('Invalid invitation token.');
-  }
-
-  if (!isNeonConfigured()) {
-    const store = getMemoryTeacherStore();
-    const invitation = store.invitationsByToken[token];
-    if (!invitation) throw new Error('Invalid invitation token.');
-    if (
-      invitation.usedByClerkUserId &&
-      invitation.usedByClerkUserId !== clerkUserId
-    ) {
-      throw new Error('This invitation has already been used.');
-    }
-    invitation.usedByClerkUserId = clerkUserId;
-    invitation.usedAt = nowIso();
-    await getOrCreateTeacherRecord(clerkUserId);
-    return;
-  }
-
-  await ensureTeacherTables();
-  const sql = getNeonSql();
-  const updated = await sql`
-    UPDATE stock_game_teacher_invitations
-    SET used_by_clerk_user_id = ${clerkUserId},
-        used_at = NOW()
-    WHERE token = ${token}
-      AND (used_by_clerk_user_id IS NULL OR used_by_clerk_user_id = ${clerkUserId})
-    RETURNING token
-  `;
-
-  if (toObjectRows(updated).length === 0) {
-    const existing = await sql`
-      SELECT token
-      FROM stock_game_teacher_invitations
-      WHERE token = ${token}
-      LIMIT 1
-    `;
-    if (toObjectRows(existing).length === 0) {
-      throw new Error('Invalid invitation token.');
-    }
-    throw new Error('This invitation has already been used.');
-  }
-
-  await getOrCreateTeacherRecord(clerkUserId);
 }
 
 export async function listTeacherClassrooms(clerkUserId: string) {

@@ -16,6 +16,22 @@ describe('teacher credential exports', () => {
     expect(csv).toContain('ABC123,quick_fox77,J9LM7P2R');
   });
 
+  it('escapes csv-special characters and neutralizes formula-like values', () => {
+    const csv = toCredentialsCsv('A,B"C', [
+      { alias: 'line\nbreak', passcode: '=SUM(1,1)' },
+      { alias: '@username', passcode: '+1+2' },
+    ]);
+
+    // Classroom code includes comma and quote -> quoted and quote-escaped.
+    expect(csv).toContain('"A,B""C"');
+    // Newline in alias -> quoted.
+    expect(csv).toContain('"line\nbreak"');
+    // Formula-like cells are prefixed with apostrophe.
+    expect(csv).toContain("'=SUM(1,1)");
+    expect(csv).toContain("'@username");
+    expect(csv).toContain("'+1+2");
+  });
+
   it('renders printable card html and escapes unsafe values', () => {
     const html = buildCredentialCardsHtml('ABC<123>', [
       { alias: 'alpha<script>', passcode: 'PA55<CODE>' },

@@ -11,6 +11,97 @@ const navItems = [
   { href: '/stock', label: 'Stock Market' },
 ];
 
+function ClerkHeaderActions({
+  showTeacherApprovalLink,
+  mobile,
+  onNavigate,
+}: {
+  showTeacherApprovalLink?: boolean;
+  mobile?: boolean;
+  onNavigate?: () => void;
+}) {
+  const { userId } = useAuth();
+  const isSignedIn = Boolean(userId);
+
+  if (mobile) {
+    return isSignedIn ? (
+      <>
+        <Link
+          href="/teacher"
+          onClick={onNavigate}
+          className="block rounded-3xl px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+        >
+          Teacher Dashboard
+        </Link>
+        {showTeacherApprovalLink ? (
+          <Link
+            href="/admin/teacher-approval"
+            onClick={onNavigate}
+            className="block rounded-3xl border border-emerald-300 px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-800 transition hover:border-emerald-400 hover:bg-emerald-50"
+          >
+            Teacher Approval
+          </Link>
+        ) : null}
+        <div className="rounded-3xl px-4 py-2">
+          <UserButton />
+        </div>
+      </>
+    ) : (
+      <>
+        <Link
+          href="/sign-up"
+          onClick={onNavigate}
+          className="block rounded-3xl bg-slate-900 px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-slate-800"
+        >
+          Teacher Sign Up
+        </Link>
+        <Link
+          href="/sign-in"
+          onClick={onNavigate}
+          className="block rounded-3xl px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+        >
+          Teacher Sign In
+        </Link>
+      </>
+    );
+  }
+
+  return isSignedIn ? (
+    <>
+      <Link
+        href="/teacher"
+        className="rounded-full border border-slate-300 px-5 py-2 text-sm font-black uppercase tracking-[0.2em] text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+      >
+        Teacher Dashboard
+      </Link>
+      {showTeacherApprovalLink ? (
+        <Link
+          href="/admin/teacher-approval"
+          className="rounded-full border border-emerald-300 px-4 py-2 text-sm font-black uppercase tracking-[0.15em] text-emerald-700 transition hover:border-emerald-400 hover:text-emerald-900"
+        >
+          Teacher Approval
+        </Link>
+      ) : null}
+      <UserButton />
+    </>
+  ) : (
+    <>
+      <Link
+        href="/sign-up"
+        className="rounded-full bg-slate-900 px-5 py-2 text-sm font-black uppercase tracking-[0.2em] text-white transition hover:bg-slate-800"
+      >
+        Teacher Sign Up
+      </Link>
+      <Link
+        href="/sign-in"
+        className="rounded-full border border-slate-300 px-5 py-2 text-sm font-black uppercase tracking-[0.2em] text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+      >
+        Teacher Sign In
+      </Link>
+    </>
+  );
+}
+
 export default function SiteHeader({
   clerkEnabled,
   showTeacherApprovalLink,
@@ -19,8 +110,6 @@ export default function SiteHeader({
   showTeacherApprovalLink?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { userId } = useAuth();
-  const isSignedIn = Boolean(userId);
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-md">
@@ -52,40 +141,9 @@ export default function SiteHeader({
             Try Fed Simulator
           </Link>
           {clerkEnabled ? (
-            isSignedIn ? (
-              <>
-                <Link
-                  href="/teacher"
-                  className="rounded-full border border-slate-300 px-5 py-2 text-sm font-black uppercase tracking-[0.2em] text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
-                >
-                  Teacher Dashboard
-                </Link>
-                {showTeacherApprovalLink ? (
-                  <Link
-                    href="/admin/teacher-approval"
-                    className="rounded-full border border-emerald-300 px-4 py-2 text-sm font-black uppercase tracking-[0.15em] text-emerald-700 transition hover:border-emerald-400 hover:text-emerald-900"
-                  >
-                    Teacher Approval
-                  </Link>
-                ) : null}
-                <UserButton />
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/sign-up"
-                  className="rounded-full bg-slate-900 px-5 py-2 text-sm font-black uppercase tracking-[0.2em] text-white transition hover:bg-slate-800"
-                >
-                  Teacher Sign Up
-                </Link>
-                <Link
-                  href="/sign-in"
-                  className="rounded-full border border-slate-300 px-5 py-2 text-sm font-black uppercase tracking-[0.2em] text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
-                >
-                  Teacher Sign In
-                </Link>
-              </>
-            )
+            <ClerkHeaderActions
+              showTeacherApprovalLink={showTeacherApprovalLink}
+            />
           ) : (
             <Link
               href="/teacher"
@@ -129,46 +187,11 @@ export default function SiteHeader({
               Try Fed Simulator
             </Link>
             {clerkEnabled ? (
-              isSignedIn ? (
-                <>
-                  <Link
-                    href="/teacher"
-                    onClick={() => setMenuOpen(false)}
-                    className="block rounded-3xl px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    Teacher Dashboard
-                  </Link>
-                  {showTeacherApprovalLink ? (
-                    <Link
-                      href="/admin/teacher-approval"
-                      onClick={() => setMenuOpen(false)}
-                      className="block rounded-3xl border border-emerald-300 px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-800 transition hover:border-emerald-400 hover:bg-emerald-50"
-                    >
-                      Teacher Approval
-                    </Link>
-                  ) : null}
-                  <div className="rounded-3xl px-4 py-2">
-                    <UserButton />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/sign-up"
-                    onClick={() => setMenuOpen(false)}
-                    className="block rounded-3xl bg-slate-900 px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-slate-800"
-                  >
-                    Teacher Sign Up
-                  </Link>
-                  <Link
-                    href="/sign-in"
-                    onClick={() => setMenuOpen(false)}
-                    className="block rounded-3xl px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    Teacher Sign In
-                  </Link>
-                </>
-              )
+              <ClerkHeaderActions
+                showTeacherApprovalLink={showTeacherApprovalLink}
+                mobile
+                onNavigate={() => setMenuOpen(false)}
+              />
             ) : (
               <Link
                 href="/teacher"

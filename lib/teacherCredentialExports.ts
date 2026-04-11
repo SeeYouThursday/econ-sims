@@ -15,6 +15,33 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#39;');
 }
 
+function sanitizeCsvCell(value: string) {
+  // Prevent spreadsheet formula execution when opening CSV in Excel/Sheets.
+  if (/^[\s\t]*[=+\-@]/.test(value)) {
+    return `'${value}`;
+  }
+
+  return value;
+}
+
+function escapeCsv(value: string | number | boolean | null | undefined) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  const sanitized = sanitizeCsvCell(String(value));
+  if (
+    sanitized.includes(',') ||
+    sanitized.includes('"') ||
+    sanitized.includes('\n') ||
+    sanitized.includes('\r')
+  ) {
+    return `"${sanitized.replaceAll('"', '""')}"`;
+  }
+
+  return sanitized;
+}
+
 export function toCredentialsCsv(
   classroomCode: string,
   credentials: GeneratedCredential[],
@@ -25,7 +52,9 @@ export function toCredentialsCsv(
     entry.alias,
     entry.passcode,
   ]);
-  return [header, ...rows].map((row) => row.join(',')).join('\n');
+  return [header, ...rows]
+    .map((row) => row.map((cell) => escapeCsv(cell)).join(','))
+    .join('\n');
 }
 
 export function buildCredentialCardsHtml(
