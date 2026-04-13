@@ -151,26 +151,30 @@ export default function TradeTicket({
   }, [hasSellableSymbols, normalizedSymbol, positions, sellableSymbols, side]);
 
   useEffect(() => {
-    if (!hasSellableSymbols) {
+    if (side !== 'sell' || !hasSellableSymbols) {
       return;
     }
 
     let isActive = true;
-    void fetchTickerNames(sellableSymbols).then((names) => {
-      if (!isActive) {
-        return;
-      }
+    void fetchTickerNames(sellableSymbols)
+      .then((names) => {
+        if (!isActive) {
+          return;
+        }
 
-      setTickerNamesBySymbol((previous) => ({
-        ...previous,
-        ...names,
-      }));
-    });
+        setTickerNamesBySymbol((previous) => ({
+          ...previous,
+          ...names,
+        }));
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to fetch ticker names.', error);
+      });
 
     return () => {
       isActive = false;
     };
-  }, [hasSellableSymbols, sellableSymbols]);
+  }, [hasSellableSymbols, sellableSymbols, side]);
 
   const placeTrade = async () => {
     if (tradingDisabled) {
