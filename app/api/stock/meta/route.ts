@@ -32,21 +32,25 @@ async function fetchPolygonTickerName(symbol: string) {
     return fallbackTickerName(symbol);
   }
 
-  const url = `https://api.polygon.io/v3/reference/tickers/${encodeURIComponent(symbol)}?apiKey=${POLYGON_API_KEY}`;
-  const response = await fetch(url, { next: { revalidate: 86400 } });
+  try {
+    const url = `https://api.polygon.io/v3/reference/tickers/${encodeURIComponent(symbol)}?apiKey=${POLYGON_API_KEY}`;
+    const response = await fetch(url, { next: { revalidate: 86400 } });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return fallbackTickerName(symbol);
+    }
+
+    const payload = (await response.json().catch(() => null)) as {
+      result?: { name?: unknown };
+    } | null;
+
+    const name = payload?.result?.name;
+    return typeof name === 'string' && name.trim()
+      ? name
+      : fallbackTickerName(symbol);
+  } catch {
     return fallbackTickerName(symbol);
   }
-
-  const payload = (await response.json().catch(() => null)) as {
-    result?: { name?: unknown };
-  } | null;
-
-  const name = payload?.result?.name;
-  return typeof name === 'string' && name.trim()
-    ? name
-    : fallbackTickerName(symbol);
 }
 
 export async function GET(request: NextRequest) {
