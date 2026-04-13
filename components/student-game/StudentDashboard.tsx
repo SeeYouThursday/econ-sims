@@ -96,7 +96,6 @@ export default function StudentDashboard({
 
       if (isSessionTokenError(message)) {
         onSignOut();
-        setError('Session expired. Please sign in again.');
         return;
       }
 
