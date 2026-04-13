@@ -156,16 +156,20 @@ export default function TradeTicket({
     }
 
     let isActive = true;
-    void fetchTickerNames(sellableSymbols).then((names) => {
-      if (!isActive) {
-        return;
-      }
+    void fetchTickerNames(sellableSymbols)
+      .then((names) => {
+        if (!isActive) {
+          return;
+        }
 
-      setTickerNamesBySymbol((previous) => ({
-        ...previous,
-        ...names,
-      }));
-    });
+        setTickerNamesBySymbol((previous) => ({
+          ...previous,
+          ...names,
+        }));
+      })
+      .catch((error) => {
+        console.error('Failed to fetch ticker names.', error);
+      });
 
     return () => {
       isActive = false;
