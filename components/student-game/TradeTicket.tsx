@@ -1,13 +1,71 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchTradeQuote } from './api';
+import { fetchTickerNames, fetchTradeQuote } from './api';
 import type { StockQuote } from './types';
 import {
   buildTradeSubmission,
   calculateEstimatedOrderValue,
+  getSellableSymbols,
+  isSellSymbolAllowed,
   normalizeTradeSymbol,
 } from './tradeTicketUtils';
 
 const DEFAULT_SYMBOL = 'AAPL';
+
+const POPULAR_STOCKS = [
+  { symbol: 'AAPL', name: 'Apple Inc.' },
+  { symbol: 'MSFT', name: 'Microsoft Corporation' },
+  { symbol: 'GOOGL', name: 'Alphabet Inc. (Google)' },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.' },
+  { symbol: 'TSLA', name: 'Tesla Inc.' },
+  { symbol: 'META', name: 'Meta Platforms Inc. (Facebook)' },
+  { symbol: 'NVDA', name: 'NVIDIA Corporation' },
+  { symbol: 'JPM', name: 'JPMorgan Chase & Co.' },
+  { symbol: 'BAC', name: 'Bank of America' },
+  { symbol: 'JNJ', name: 'Johnson & Johnson' },
+  { symbol: 'PG', name: 'Procter & Gamble' },
+  { symbol: 'KO', name: 'The Coca-Cola Company' },
+  { symbol: 'MCD', name: "McDonald's Corporation" },
+  { symbol: 'NFLX', name: 'Netflix Inc.' },
+  { symbol: 'DIS', name: 'The Walt Disney Company' },
+  { symbol: 'INTC', name: 'Intel Corporation' },
+  { symbol: 'IBM', name: 'IBM Corporation' },
+  { symbol: 'XOM', name: 'Exxon Mobil Corporation' },
+  { symbol: 'WMT', name: 'Walmart Inc.' },
+  { symbol: 'HD', name: 'The Home Depot Inc.' },
+  { symbol: 'V', name: 'Visa Inc.' },
+  { symbol: 'MA', name: 'Mastercard Incorporated' },
+  { symbol: 'ORCL', name: 'Oracle Corporation' },
+  { symbol: 'SAP', name: 'SAP SE' },
+  { symbol: 'CRM', name: 'Salesforce Inc.' },
+  { symbol: 'GE', name: 'General Electric Company' },
+  { symbol: 'BA', name: 'Boeing Company' },
+  { symbol: 'CAT', name: 'Caterpillar Inc.' },
+  { symbol: 'AXP', name: 'American Express Company' },
+  { symbol: 'MMM', name: '3M Company' },
+  { symbol: 'UNH', name: 'UnitedHealth Group Inc.' },
+  { symbol: 'CVS', name: 'CVS Health Corporation' },
+  { symbol: 'WBA', name: 'Walgreens Boots Alliance Inc.' },
+  { symbol: 'T', name: 'AT&T Inc.' },
+  { symbol: 'VZ', name: 'Verizon Communications Inc.' },
+  { symbol: 'CSCO', name: 'Cisco Systems Inc.' },
+  { symbol: 'AMD', name: 'Advanced Micro Devices Inc.' },
+  { symbol: 'QCOM', name: 'Qualcomm Inc.' },
+  { symbol: 'TXN', name: 'Texas Instruments Incorporated' },
+  { symbol: 'NOW', name: 'ServiceNow Inc.' },
+  { symbol: 'ADBE', name: 'Adobe Inc.' },
+  { symbol: 'PYPL', name: 'PayPal Holdings Inc.' },
+  { symbol: 'SQ', name: 'Block Inc. (Square)' },
+  { symbol: 'SNPS', name: 'Synopsys Inc.' },
+  { symbol: 'INTU', name: 'Intuit Inc.' },
+];
+
+const STOCK_NAME_MAP = Object.fromEntries(
+  POPULAR_STOCKS.map((stock) => [stock.symbol, stock.name]),
+);
+
+function fallbackTickerName(symbol: string) {
+  return `Ticker ${symbol}`;
+}
 
 type TradeTicketProps = {
   onSubmit: (input: {
@@ -18,6 +76,9 @@ type TradeTicketProps = {
   submitting: boolean;
   tradingDisabled?: boolean;
   disabledReason?: string;
+  availableCash?: number;
+  lastFillMessage?: string | null;
+  positions?: Record<string, number>;
 };
 
 export default function TradeTicket({
@@ -25,6 +86,9 @@ export default function TradeTicket({
   submitting,
   tradingDisabled = false,
   disabledReason,
+  availableCash = 0,
+  lastFillMessage = null,
+  positions = {},
 }: TradeTicketProps) {
   const [symbol, setSymbol] = useState(DEFAULT_SYMBOL);
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
@@ -32,8 +96,15 @@ export default function TradeTicket({
   const [quote, setQuote] = useState<StockQuote | null>(null);
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [showStockGuide, setShowStockGuide] = useState(false);
+  const [tickerNamesBySymbol, setTickerNamesBySymbol] =
+    useState<Record<string, string>>(STOCK_NAME_MAP);
 
   const normalizedSymbol = normalizeTradeSymbol(symbol);
+  const sellableSymbols = getSellableSymbols(positions);
+  const hasSellableSymbols = sellableSymbols.length > 0;
+  const isStrictSellSelectionInvalid =
+    side === 'sell' && !isSellSymbolAllowed(normalizedSymbol, positions);
 
   const loadQuote = useCallback(async (nextSymbol: string) => {
     if (!nextSymbol) {
@@ -64,6 +135,43 @@ export default function TradeTicket({
     void loadQuote(DEFAULT_SYMBOL);
   }, [loadQuote]);
 
+  useEffect(() => {
+    if (side !== 'sell') {
+      return;
+    }
+
+    if (!hasSellableSymbols) {
+      setSymbol('');
+      return;
+    }
+
+    if (!isSellSymbolAllowed(normalizedSymbol, positions)) {
+      setSymbol(sellableSymbols[0] ?? '');
+    }
+  }, [hasSellableSymbols, normalizedSymbol, positions, sellableSymbols, side]);
+
+  useEffect(() => {
+    if (!hasSellableSymbols) {
+      return;
+    }
+
+    let isActive = true;
+    void fetchTickerNames(sellableSymbols).then((names) => {
+      if (!isActive) {
+        return;
+      }
+
+      setTickerNamesBySymbol((previous) => ({
+        ...previous,
+        ...names,
+      }));
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [hasSellableSymbols, sellableSymbols]);
+
   const placeTrade = async () => {
     if (tradingDisabled) {
       return;
@@ -89,6 +197,11 @@ export default function TradeTicket({
   };
 
   const estimatedValue = calculateEstimatedOrderValue(shares, quote);
+  const insufficientCash =
+    side === 'buy' &&
+    estimatedValue !== null &&
+    Number.isFinite(estimatedValue) &&
+    estimatedValue > availableCash;
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5">
@@ -102,20 +215,52 @@ export default function TradeTicket({
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div>
           <label className="text-xs font-semibold text-slate-600">Symbol</label>
-          <input
-            title="Trade symbol"
-            aria-label="Trade symbol"
-            disabled={tradingDisabled}
-            value={symbol}
-            onBlur={() => {
-              void loadQuote(symbol.trim().toUpperCase());
-            }}
-            onChange={(event) => {
-              setSymbol(event.target.value);
-              setQuoteError(null);
-            }}
-            className="mt-1 w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none"
-          />
+          {side === 'sell' ? (
+            <select
+              title="Trade symbol"
+              aria-label="Trade symbol"
+              disabled={tradingDisabled || !hasSellableSymbols}
+              value={symbol}
+              onChange={(event) => {
+                const newSymbol = event.target.value;
+                setSymbol(newSymbol);
+                setQuoteError(null);
+                void loadQuote(newSymbol);
+              }}
+              className="mt-1 w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none"
+            >
+              {!hasSellableSymbols ? (
+                <option value="">No stocks available to sell</option>
+              ) : (
+                <option value="">Select a stock to sell...</option>
+              )}
+              {sellableSymbols.map((sym) => {
+                const shares = positions[sym] ?? 0;
+                const companyName =
+                  tickerNamesBySymbol[sym] ?? fallbackTickerName(sym);
+                return (
+                  <option key={sym} value={sym}>
+                    {`${sym} - ${companyName}`} ({shares} shares)
+                  </option>
+                );
+              })}
+            </select>
+          ) : (
+            <input
+              title="Trade symbol"
+              aria-label="Trade symbol"
+              disabled={tradingDisabled}
+              value={symbol}
+              onBlur={() => {
+                void loadQuote(symbol.trim().toUpperCase());
+              }}
+              onChange={(event) => {
+                setSymbol(event.target.value);
+                setQuoteError(null);
+              }}
+              className="mt-1 w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none"
+            />
+          )}
         </div>
         <div>
           <label className="text-xs font-semibold text-slate-600">Side</label>
@@ -186,6 +331,12 @@ export default function TradeTicket({
         </div>
       </div>
 
+      {lastFillMessage ? (
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {lastFillMessage}
+        </div>
+      ) : null}
+
       {quoteError ? (
         <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {quoteError}
@@ -198,16 +349,68 @@ export default function TradeTicket({
         </div>
       ) : null}
 
+      {insufficientCash ? (
+        <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          Insufficient cash. You have ${availableCash.toFixed(2)}, but this
+          order costs ${estimatedValue?.toFixed(2)}.
+        </div>
+      ) : null}
+
       <button
         type="button"
         onClick={placeTrade}
         disabled={
-          tradingDisabled || submitting || loadingQuote || !normalizedSymbol
+          tradingDisabled ||
+          submitting ||
+          loadingQuote ||
+          !normalizedSymbol ||
+          insufficientCash ||
+          isStrictSellSelectionInvalid
         }
         className="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:bg-slate-500"
       >
-        {submitting ? 'Placing…' : 'Submit trade'}
+        {submitting
+          ? 'Placing…'
+          : side === 'sell' && !hasSellableSymbols
+            ? 'No stocks to sell'
+            : 'Submit trade'}
       </button>
+
+      <button
+        type="button"
+        onClick={() => setShowStockGuide(!showStockGuide)}
+        className="mt-3 w-full rounded-2xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+      >
+        {showStockGuide ? '✓ Hide' : '+ Browse'} Popular Stocks
+      </button>
+
+      {showStockGuide ? (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-semibold text-slate-600 mb-3">
+            Click a stock to load its current price:
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {POPULAR_STOCKS.map((stock) => (
+              <button
+                key={stock.symbol}
+                type="button"
+                onClick={() => {
+                  setSymbol(stock.symbol);
+                  void loadQuote(stock.symbol);
+                }}
+                className="text-left rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs hover:border-slate-400 hover:bg-white transition-colors"
+              >
+                <div className="font-semibold text-slate-900">
+                  {stock.symbol}
+                </div>
+                <div className="text-slate-600 text-xs truncate">
+                  {stock.name}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

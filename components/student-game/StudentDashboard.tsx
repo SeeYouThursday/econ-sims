@@ -24,6 +24,13 @@ type StudentDashboardProps = {
   onSignOut: () => void;
 };
 
+function isSessionTokenError(message: string) {
+  return (
+    message.includes('Invalid session token') ||
+    message.includes('Session expired')
+  );
+}
+
 export default function StudentDashboard({
   session,
   onSignOut,
@@ -82,15 +89,22 @@ export default function StudentDashboard({
       setLeaderboard(nextLeaderboard);
       setTradeHistory(nextTradeHistory);
     } catch (nextError) {
-      setError(
+      const message =
         nextError instanceof Error
           ? nextError.message
-          : 'Unable to load classroom data.',
-      );
+          : 'Unable to load classroom data.';
+
+      if (isSessionTokenError(message)) {
+        onSignOut();
+        setError('Session expired. Please sign in again.');
+        return;
+      }
+
+      setError(message);
     } finally {
       setLoading(false);
     }
-  }, [session.classroomCode, session.token]);
+  }, [onSignOut, session.classroomCode, session.token]);
 
   useEffect(() => {
     void loadSnapshot();
@@ -124,11 +138,18 @@ export default function StudentDashboard({
       setLeaderboard(nextLeaderboard);
       setTradeHistory(nextTradeHistory);
     } catch (nextError) {
-      setError(
+      const message =
         nextError instanceof Error
           ? nextError.message
-          : 'Unable to place trade.',
-      );
+          : 'Unable to place trade.';
+
+      if (isSessionTokenError(message)) {
+        onSignOut();
+        setError('Session expired. Please sign in again.');
+        return;
+      }
+
+      setError(message);
     } finally {
       setSubmittingTrade(false);
     }
@@ -141,12 +162,6 @@ export default function StudentDashboard({
       {error ? (
         <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           {error}
-        </div>
-      ) : null}
-
-      {lastFillMessage ? (
-        <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-          {lastFillMessage}
         </div>
       ) : null}
 
@@ -181,6 +196,9 @@ export default function StudentDashboard({
                   ? 'Trading is off because this classroom game has ended.'
                   : undefined
               }
+              availableCash={portfolio?.cash ?? 0}
+              lastFillMessage={lastFillMessage}
+              positions={portfolio?.positions}
             />
             <TradeHistoryCard history={tradeHistory} />
           </div>

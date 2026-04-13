@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTradeSubmission,
   calculateEstimatedOrderValue,
+  getSellableSymbols,
+  isSellSymbolAllowed,
   normalizeTradeSymbol,
 } from '../components/student-game/tradeTicketUtils';
 
@@ -41,5 +43,19 @@ describe('trade ticket utils', () => {
 
   it('returns null estimated value when no quote is loaded', () => {
     expect(calculateEstimatedOrderValue('4', null)).toBeNull();
+  });
+
+  it('returns sorted sellable symbols with positive share counts only', () => {
+    expect(getSellableSymbols({ msft: 0, AAPL: 4, tsla: 2 })).toEqual([
+      'AAPL',
+      'TSLA',
+    ]);
+  });
+
+  it('allows sell symbols only when the user owns positive shares', () => {
+    const positions = { AAPL: 3, MSFT: 0 };
+    expect(isSellSymbolAllowed('aapl', positions)).toBe(true);
+    expect(isSellSymbolAllowed('msft', positions)).toBe(false);
+    expect(isSellSymbolAllowed('tsla', positions)).toBe(false);
   });
 });

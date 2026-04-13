@@ -9,24 +9,18 @@ import { StudentSession } from './types';
 export default function StudentGameExperience() {
   const [session, setSession] = useState<StudentSession | null>(null);
 
+  // Restore session from localStorage after hydration to avoid mismatch
   useEffect(() => {
     const loaded = loadStudentSession();
-    if (!loaded) {
-      return;
-    }
-
-    const expiresAtMs = Date.parse(loaded.expiresAt);
-    if (Number.isFinite(expiresAtMs) && expiresAtMs > Date.now()) {
-      const timeoutId = window.setTimeout(() => {
+    if (loaded) {
+      const expiresAtMs = Date.parse(loaded.expiresAt);
+      if (Number.isFinite(expiresAtMs) && expiresAtMs > Date.now()) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSession(loaded);
-      }, 0);
-
-      return () => {
-        window.clearTimeout(timeoutId);
-      };
+      } else {
+        clearStudentSession();
+      }
     }
-
-    clearStudentSession();
   }, []);
 
   const handleSignOut = () => {
