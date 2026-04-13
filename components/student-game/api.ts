@@ -11,6 +11,14 @@ type ApiErrorShape = {
   error?: string;
 };
 
+function sanitizeTickerSymbol(symbol: string) {
+  return symbol.trim().toUpperCase();
+}
+
+function fallbackTickerName(symbol: string) {
+  return `Ticker ${symbol}`;
+}
+
 function getApiErrorMessage(value: unknown) {
   if (!value || typeof value !== 'object') {
     return null;
@@ -230,4 +238,54 @@ export async function submitTrade(input: {
   }
 
   return payload;
+}
+
+export async function fetchTickerNames(symbols: string[]) {
+  const normalized = Array.from(
+    new Set(symbols.map(sanitizeTickerSymbol).filter(Boolean)),
+  );
+
+  if (normalized.length === 0) {
+    return {} as Record<string, string>;
+  }
+
+  const fallback = Object.fromEntries(
+    normalized.map((symbol) => [symbol, fallbackTickerName(symbol)]),
+  ) as Record<string, string>;
+
+  let response: Response;
+  let payload: unknown;
+
+  try {
+    response = await fetch(
+      `/api/stock/meta?symbols=${encodeURIComponent(normalized.join(','))}`,
+      {
+        cache: 'no-store',
+      },
+    );
+
+    payload = await readJsonOrNull(response);
+  } catch {
+    return fallback;
+  }
+  if (!response.ok || !payload || typeof payload !== 'object') {
+    return fallback;
+  }
+
+  const candidate = payload as {
+    symbols?: Record<string, unknown>;
+  };
+
+  if (!candidate.symbols || typeof candidate.symbols !== 'object') {
+    return fallback;
+  }
+
+  for (const symbol of normalized) {
+    const name = candidate.symbols[symbol];
+    if (typeof name === 'string' && name.trim()) {
+      fallback[symbol] = name;
+    }
+  }
+
+  return fallback;
 }

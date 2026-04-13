@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  fetchTickerNames,
   fetchTradeHistory,
   fetchLeaderboard,
   fetchPortfolio,
@@ -189,5 +190,34 @@ describe('student-game api client', () => {
     await expect(fetchTradeHistory('token_1')).rejects.toThrow(
       'Unable to load trade history.',
     );
+  });
+
+  it('fetchTickerNames returns names from the stock meta route', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        symbols: {
+          AAPL: 'Apple Inc.',
+          MSFT: 'Microsoft Corporation',
+        },
+      }),
+    } as Response);
+
+    const names = await fetchTickerNames(['aapl', 'msft']);
+
+    expect(names.AAPL).toBe('Apple Inc.');
+    expect(names.MSFT).toBe('Microsoft Corporation');
+  });
+
+  it('fetchTickerNames falls back to deterministic labels when route fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'upstream failed' }),
+    } as Response);
+
+    const names = await fetchTickerNames(['aapl', 'meta']);
+
+    expect(names.AAPL).toBe('Ticker AAPL');
+    expect(names.META).toBe('Ticker META');
   });
 });
