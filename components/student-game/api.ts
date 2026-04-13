@@ -249,18 +249,25 @@ export async function fetchTickerNames(symbols: string[]) {
     return {} as Record<string, string>;
   }
 
-  const response = await fetch(
-    `/api/stock/meta?symbols=${encodeURIComponent(normalized.join(','))}`,
-    {
-      cache: 'no-store',
-    },
-  );
-
-  const payload = await readJsonOrNull(response);
   const fallback = Object.fromEntries(
     normalized.map((symbol) => [symbol, fallbackTickerName(symbol)]),
   ) as Record<string, string>;
 
+  let response: Response;
+  let payload: unknown;
+
+  try {
+    response = await fetch(
+      `/api/stock/meta?symbols=${encodeURIComponent(normalized.join(','))}`,
+      {
+        cache: 'no-store',
+      },
+    );
+
+    payload = await readJsonOrNull(response);
+  } catch {
+    return fallback;
+  }
   if (!response.ok || !payload || typeof payload !== 'object') {
     return fallback;
   }
