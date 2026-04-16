@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { fetchTickerNames, fetchTradeQuote } from './api';
 import type { StockQuote } from './types';
 import {
@@ -101,7 +101,10 @@ export default function TradeTicket({
     useState<Record<string, string>>(STOCK_NAME_MAP);
 
   const normalizedSymbol = normalizeTradeSymbol(symbol);
-  const sellableSymbols = getSellableSymbols(positions);
+  const sellableSymbols = useMemo(
+    () => getSellableSymbols(positions),
+    [positions],
+  );
   const hasSellableSymbols = sellableSymbols.length > 0;
   const isStrictSellSelectionInvalid =
     side === 'sell' && !isSellSymbolAllowed(normalizedSymbol, positions);
@@ -150,8 +153,10 @@ export default function TradeTicket({
     }
   }, [hasSellableSymbols, normalizedSymbol, positions, sellableSymbols, side]);
 
+  const shouldFetchTickerNames = side === 'sell' && hasSellableSymbols;
+
   useEffect(() => {
-    if (side !== 'sell' || !hasSellableSymbols) {
+    if (!shouldFetchTickerNames) {
       return;
     }
 
@@ -174,7 +179,7 @@ export default function TradeTicket({
     return () => {
       isActive = false;
     };
-  }, [hasSellableSymbols, sellableSymbols, side]);
+  }, [shouldFetchTickerNames, sellableSymbols]);
 
   const placeTrade = async () => {
     if (tradingDisabled) {
@@ -267,7 +272,9 @@ export default function TradeTicket({
           )}
         </div>
         <div>
-          <label className="text-xs font-semibold text-slate-600">Side</label>
+          <label className="text-xs font-semibold text-slate-600">
+            Buy or Sell
+          </label>
           <select
             title="Trade side"
             aria-label="Trade side"
