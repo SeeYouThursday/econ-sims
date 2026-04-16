@@ -38,6 +38,7 @@ describe('teacher credential exports', () => {
     ]);
 
     expect(html).toContain('Student Credential Cards');
+    expect(html).toContain('Classroom ABC&lt;123&gt; &bull; 1 students');
     expect(html).toContain('ABC&lt;123&gt;');
     expect(html).toContain('alpha&lt;script&gt;');
     expect(html).toContain('PA55&lt;CODE&gt;');

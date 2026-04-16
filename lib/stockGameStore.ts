@@ -18,7 +18,6 @@ type Student = {
   id: string;
   classroomCode: string;
   username: string;
-  studentPasscode?: string;
   passcodeHash: string;
   isActive?: boolean;
   cash: number;
@@ -160,7 +159,6 @@ type ListStudentsInput = {
 type ClassroomStudentSummary = {
   studentId: string;
   username: string;
-  studentPasscode: string | null;
   createdAt: string;
   isActive: boolean;
   cash: number;
@@ -364,12 +362,27 @@ function purgeExpiredData(state: PersistedState) {
   return changed;
 }
 
+function stripLegacyStudentPasscodes(state: PersistedState) {
+  let changed = false;
+
+  for (const student of Object.values(state.students)) {
+    if ('studentPasscode' in student) {
+      delete (student as Student & { studentPasscode?: string }).studentPasscode;
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
 async function loadState() {
   if (!isRedisConfigured()) {
     if (!globalThis.__stockGameState) {
       globalThis.__stockGameState = createEmptyState();
       ensureSeedClassroom(globalThis.__stockGameState);
     }
+
+    stripLegacyStudentPasscodes(globalThis.__stockGameState);
 
     return globalThis.__stockGameState;
   }
@@ -386,6 +399,7 @@ async function loadState() {
       globalThis.__stockGameState = createEmptyState();
       ensureSeedClassroom(globalThis.__stockGameState);
     }
+    stripLegacyStudentPasscodes(globalThis.__stockGameState);
     return globalThis.__stockGameState;
   }
 
@@ -398,6 +412,7 @@ async function loadState() {
     const beforeSeedCount = Object.keys(state.classrooms).length;
     ensureSeedClassroom(state);
     const purged = purgeExpiredData(state);
+    const scrubbedLegacyPasscodes = stripLegacyStudentPasscodes(state);
 
     // Keep process-local fallback in sync so request paths in the same dev
     // process can continue when Redis writes are intermittently failing.
@@ -406,7 +421,8 @@ async function loadState() {
     if (
       !raw ||
       Object.keys(state.classrooms).length !== beforeSeedCount ||
-      purged
+      purged ||
+      scrubbedLegacyPasscodes
     ) {
       await redis.set(STATE_KEY, JSON.stringify(state));
     }
@@ -421,6 +437,7 @@ async function loadState() {
       globalThis.__stockGameState = createEmptyState();
       ensureSeedClassroom(globalThis.__stockGameState);
     }
+    stripLegacyStudentPasscodes(globalThis.__stockGameState);
     return globalThis.__stockGameState;
   }
 }
@@ -762,7 +779,6 @@ export async function createStudent(input: CreateStudentInput) {
     id,
     classroomCode,
     username,
-    studentPasscode,
     passcodeHash: hashSecret(studentPasscode),
     isActive: true,
     cash: classStartingCash,
@@ -778,6 +794,7 @@ export async function createStudent(input: CreateStudentInput) {
     studentId: id,
     classroomCode,
     username: student.username,
+    studentPasscode,
     startingCash: classStartingCash,
     createdAt: student.createdAt,
     storage: isRedisConfigured() ? 'redis' : 'memory',
@@ -842,7 +859,6 @@ export async function createStudentsBatch(input: CreateStudentsBatchInput) {
       id: studentId,
       classroomCode,
       username: entry.username,
-      studentPasscode: entry.studentPasscode,
       passcodeHash: hashSecret(entry.studentPasscode),
       isActive: true,
       cash: classStartingCash,
@@ -859,6 +875,7 @@ export async function createStudentsBatch(input: CreateStudentsBatchInput) {
       studentId,
       classroomCode,
       username: entry.username,
+      studentPasscode: entry.studentPasscode,
       startingCash: classStartingCash,
       createdAt,
     };
@@ -1227,7 +1244,6 @@ export async function listStudentsForClassroom(input: ListStudentsInput) {
       return {
         studentId: student.id,
         username: student.username,
-        studentPasscode: student.studentPasscode ?? null,
         createdAt: student.createdAt,
         isActive: isStudentActive(student),
         cash: portfolio.cash,

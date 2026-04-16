@@ -58,9 +58,25 @@ describe('students route classroom resync', () => {
 
     vi.doMock('@/lib/stockGameStore', () => ({
       createStudent,
+      createStudentsBatch: vi.fn(),
       deleteStudent: vi.fn(),
       ensureTeacherClassroom,
+      listStudentsForClassroom: vi.fn(),
+      manageClassroomStudents: vi.fn(),
+      manageStudent: vi.fn(),
       StockGameError: MockStockGameError,
+    }));
+
+    vi.doMock('@/lib/studentAliasStore', () => ({
+      verifyStudentAliasPasscodeStorage: vi.fn(),
+      upsertStudentAlias: vi.fn(async () => undefined),
+      upsertStudentAliasesBulk: vi.fn(async () => undefined),
+      deleteStudentAlias: vi.fn(),
+      setStudentAliasActive: vi.fn(),
+      listStudentAliasesByClassroom: vi.fn(async () => ({
+        aliases: [],
+        storage: 'neon',
+      })),
     }));
 
     const studentsRoute = await import('../app/api/stock-game/students/route');
@@ -79,6 +95,192 @@ describe('students route classroom resync', () => {
     expect(response.status).toBe(201);
     expect(createStudent).toHaveBeenCalledTimes(2);
     expect(ensureTeacherClassroom).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails student creation when alias persistence fails', async () => {
+    class MockStockGameError extends Error {
+      status: number;
+
+      constructor(message: string, status = 400) {
+        super(message);
+        this.status = status;
+      }
+    }
+
+    vi.doMock('@clerk/nextjs/server', () => ({
+      auth: vi.fn(async () => ({ userId: 'teacher_123' })),
+      clerkClient: vi.fn(async () => ({
+        users: {
+          getUser: vi.fn(async () => ({
+            id: 'teacher_123',
+            publicMetadata: {
+              role: 'teacher',
+              teacherApproved: true,
+            },
+          })),
+        },
+      })),
+    }));
+
+    vi.doMock('@/lib/teacherStore', () => ({
+      assertTeacherOwnsClassroom: vi.fn(async () => ({
+        code: 'ABC123',
+        title: 'Period 1',
+      })),
+    }));
+
+    const deleteStudent = vi.fn(async () => ({
+      classroomCode: 'ABC123',
+      username: 'student_01',
+      deleted: true,
+      storage: 'memory',
+    }));
+
+    vi.doMock('@/lib/studentAliasStore', () => ({
+      verifyStudentAliasPasscodeStorage: vi.fn(),
+      upsertStudentAlias: vi.fn(async () => {
+        throw new MockStockGameError(
+          'Unable to encrypt student passcode for storage.',
+          500,
+        );
+      }),
+      upsertStudentAliasesBulk: vi.fn(),
+      deleteStudentAlias: vi.fn(),
+      setStudentAliasActive: vi.fn(),
+      listStudentAliasesByClassroom: vi.fn(async () => ({
+        aliases: [],
+        storage: 'neon',
+      })),
+    }));
+
+    vi.doMock('@/lib/stockGameStore', () => ({
+      createStudent: vi.fn(async () => ({
+        studentId: 'student_1',
+        classroomCode: 'ABC123',
+        username: 'student_01',
+        studentPasscode: 'pass1234',
+        startingCash: 10000,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        storage: 'memory',
+      })),
+      createStudentsBatch: vi.fn(),
+      deleteStudent,
+      ensureTeacherClassroom: vi.fn(async () => ({
+        code: 'ABC123',
+        ownerTeacherId: 'teacher_123',
+      })),
+      listStudentsForClassroom: vi.fn(),
+      manageClassroomStudents: vi.fn(),
+      manageStudent: vi.fn(),
+      StockGameError: MockStockGameError,
+    }));
+
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+
+    const response = await studentsRoute.POST(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: 'ABC123',
+          username: 'student_01',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Unable to encrypt student passcode for storage.',
+    });
+    expect(deleteStudent).toHaveBeenCalledWith({
+      classroomCode: 'ABC123',
+      teacherPasscode: undefined,
+      teacherUserId: 'teacher_123',
+      username: 'student_01',
+    });
+  });
+
+  it('returns an actionable error when credential storage is not configured', async () => {
+    class MockStockGameError extends Error {
+      status: number;
+
+      constructor(message: string, status = 400) {
+        super(message);
+        this.status = status;
+      }
+    }
+
+    vi.doMock('@clerk/nextjs/server', () => ({
+      auth: vi.fn(async () => ({ userId: 'teacher_123' })),
+      clerkClient: vi.fn(async () => ({
+        users: {
+          getUser: vi.fn(async () => ({
+            id: 'teacher_123',
+            publicMetadata: {
+              role: 'teacher',
+              teacherApproved: true,
+            },
+          })),
+        },
+      })),
+    }));
+
+    vi.doMock('@/lib/teacherStore', () => ({
+      assertTeacherOwnsClassroom: vi.fn(async () => ({
+        code: 'ABC123',
+        title: 'Period 1',
+      })),
+    }));
+
+    vi.doMock('@/lib/studentAliasStore', () => ({
+      verifyStudentAliasPasscodeStorage: vi.fn(() => {
+        throw new MockStockGameError(
+          'Missing STOCK_GAME_PASSCODE_ENCRYPTION_KEY for student credential storage.',
+          500,
+        );
+      }),
+      upsertStudentAlias: vi.fn(),
+      upsertStudentAliasesBulk: vi.fn(),
+      deleteStudentAlias: vi.fn(),
+      setStudentAliasActive: vi.fn(),
+      listStudentAliasesByClassroom: vi.fn(async () => ({
+        aliases: [],
+        storage: 'neon',
+      })),
+    }));
+
+    vi.doMock('@/lib/stockGameStore', () => ({
+      createStudent: vi.fn(),
+      createStudentsBatch: vi.fn(),
+      deleteStudent: vi.fn(),
+      ensureTeacherClassroom: vi.fn(async () => ({
+        code: 'ABC123',
+        ownerTeacherId: 'teacher_123',
+      })),
+      listStudentsForClassroom: vi.fn(),
+      manageClassroomStudents: vi.fn(),
+      manageStudent: vi.fn(),
+      StockGameError: MockStockGameError,
+    }));
+
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+
+    const response = await studentsRoute.POST(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: 'ABC123',
+          username: 'student_01',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error:
+        'Missing STOCK_GAME_PASSCODE_ENCRYPTION_KEY for student credential storage.',
+    });
   });
 
   it('re-syncs and retries once when classroom is missing during roster load', async () => {
@@ -276,6 +478,7 @@ describe('students route classroom resync', () => {
             id: 'alias_1',
             classroomCode: 'ABC123',
             username: 'student_01',
+            studentPasscode: null,
             createdAt: '2026-01-01T00:00:00.000Z',
             isActive: true,
           },
@@ -285,6 +488,7 @@ describe('students route classroom resync', () => {
       upsertStudentAlias: vi.fn(),
       deleteStudentAlias: vi.fn(),
       setStudentAliasActive: vi.fn(),
+      verifyStudentAliasPasscodeStorage: vi.fn(),
     }));
 
     vi.doMock('@/lib/stockGameStore', () => ({
@@ -385,6 +589,7 @@ describe('students route classroom resync', () => {
             id: 'alias_1',
             classroomCode: 'ABC123',
             username: 'student_01',
+            studentPasscode: null,
             createdAt: '2026-01-01T00:00:00.000Z',
             isActive: true,
           },
@@ -392,12 +597,14 @@ describe('students route classroom resync', () => {
             id: 'alias_2',
             classroomCode: 'ABC123',
             username: 'student_02',
+            studentPasscode: null,
             createdAt: '2026-01-01T00:00:00.000Z',
             isActive: true,
           },
         ],
         storage: 'neon',
       })),
+      verifyStudentAliasPasscodeStorage: vi.fn(),
     }));
 
     vi.doMock('@/lib/stockGameStore', () => ({
@@ -436,5 +643,106 @@ describe('students route classroom resync', () => {
     );
 
     warnSpy.mockRestore();
+  });
+
+  it('prefers alias-store passcodes when stock roster data is present', async () => {
+    class MockStockGameError extends Error {
+      status: number;
+
+      constructor(message: string, status = 400) {
+        super(message);
+        this.status = status;
+      }
+    }
+
+    vi.doMock('@clerk/nextjs/server', () => ({
+      auth: vi.fn(async () => ({ userId: 'teacher_123' })),
+      clerkClient: vi.fn(async () => ({
+        users: {
+          getUser: vi.fn(async () => ({
+            id: 'teacher_123',
+            publicMetadata: {
+              role: 'teacher',
+              teacherApproved: true,
+            },
+          })),
+        },
+      })),
+    }));
+
+    vi.doMock('@/lib/teacherStore', () => ({
+      assertTeacherOwnsClassroom: vi.fn(async () => ({
+        code: 'ABC123',
+        title: 'Period 1',
+      })),
+    }));
+
+    vi.doMock('@/lib/studentAliasStore', () => ({
+      listStudentAliasesByClassroom: vi.fn(async () => ({
+        aliases: [
+          {
+            id: 'alias_1',
+            classroomCode: 'ABC123',
+            username: 'student_01',
+            studentPasscode: 'ALIAS999',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            isActive: true,
+          },
+        ],
+        storage: 'neon',
+      })),
+      verifyStudentAliasPasscodeStorage: vi.fn(),
+      upsertStudentAlias: vi.fn(),
+      upsertStudentAliasesBulk: vi.fn(),
+      deleteStudentAlias: vi.fn(),
+      setStudentAliasActive: vi.fn(),
+    }));
+
+    vi.doMock('@/lib/stockGameStore', () => ({
+      createStudent: vi.fn(),
+      createStudentsBatch: vi.fn(),
+      deleteStudent: vi.fn(),
+      ensureTeacherClassroom: vi.fn(async () => ({
+        code: 'ABC123',
+        ownerTeacherId: 'teacher_123',
+      })),
+      listStudentsForClassroom: vi.fn(async () => ({
+        classroomCode: 'ABC123',
+        asOf: '2026-01-02T00:00:00.000Z',
+        studentCount: 1,
+        students: [
+          {
+            studentId: 'stock_1',
+            username: 'student_01',
+            studentPasscode: null,
+            createdAt: '2026-01-02T00:00:00.000Z',
+            isActive: true,
+            cash: 1000,
+            holdingsValue: 500,
+            totalValue: 1500,
+            hasActiveSession: false,
+          },
+        ],
+        piiIncluded: true,
+        storage: 'memory',
+      })),
+      manageClassroomStudents: vi.fn(),
+      manageStudent: vi.fn(),
+      StockGameError: MockStockGameError,
+    }));
+
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+
+    const response = await studentsRoute.GET(
+      new Request(
+        'http://localhost/api/stock-game/students?classroomCode=ABC123&format=csv',
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const csv = await response.text();
+    expect(csv).toContain(
+      'ABC123,student_01,ALIAS999,true,2026-01-02T00:00:00.000Z',
+    );
   });
 });
