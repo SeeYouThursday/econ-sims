@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import SiteHeader from '@/components/SiteHeader';
+import Footer from '@/components/Footer';
 import { isTeacherAdminUserId } from '@/lib/adminAccess';
 import { isClerkConfigured } from '@/lib/clerk';
 
@@ -18,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Econ Simulations',
+  title: `Mr. G's Civics Lab`,
   description:
     'Economics Simulations to use in classrooms including a Federal Reserve Simulation.',
 };
@@ -53,6 +54,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {clerkEnabled ? <ClerkProvider>{shell}</ClerkProvider> : shell}
+        <Footer />
       </body>
     </html>
   );
