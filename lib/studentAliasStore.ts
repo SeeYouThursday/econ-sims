@@ -1,10 +1,17 @@
 import { randomUUID } from 'crypto';
 import { getNeonSql, isNeonConfigured } from './neon';
+import {
+  decryptRecoverablePasscode,
+  encryptRecoverablePasscode,
+  hasRecoverablePasscodeEncryptionKey,
+} from './passcodeCipher';
+import { StockGameError } from './stockGameStore';
 
 type StudentAliasRecord = {
   id: string;
   classroomCode: string;
   username: string;
+  studentPasscode: string | null;
   isActive: boolean;
   createdAt: string;
 };
@@ -47,6 +54,34 @@ function makeKey(classroomCode: string, username: string) {
   return `${classroomCode}::${username}`;
 }
 
+function readPasscodeFromRow(row: Record<string, unknown>) {
+  const encryptedPasscode =
+    typeof row.student_passcode_encrypted === 'string'
+      ? decryptRecoverablePasscode(row.student_passcode_encrypted)
+      : null;
+
+  if (encryptedPasscode) {
+    return encryptedPasscode;
+  }
+
+  return typeof row.student_passcode === 'string'
+    ? row.student_passcode
+    : null;
+}
+
+function assertStudentPasscodeStorageReady() {
+  if (!isNeonConfigured()) {
+    return;
+  }
+
+  if (!hasRecoverablePasscodeEncryptionKey()) {
+    throw new StockGameError(
+      'Missing STOCK_GAME_PASSCODE_ENCRYPTION_KEY for student credential storage.',
+      500,
+    );
+  }
+}
+
 async function ensureAliasTable() {
   if (!isNeonConfigured()) {
     return;
@@ -58,20 +93,34 @@ async function ensureAliasTable() {
       id TEXT PRIMARY KEY,
       classroom_code TEXT NOT NULL,
       username TEXT NOT NULL,
+      student_passcode TEXT,
+      student_passcode_encrypted TEXT,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (classroom_code, username)
     )
+  `;
+
+  await sql`
+    ALTER TABLE stock_game_student_aliases
+    ADD COLUMN IF NOT EXISTS student_passcode TEXT
+  `;
+
+  await sql`
+    ALTER TABLE stock_game_student_aliases
+    ADD COLUMN IF NOT EXISTS student_passcode_encrypted TEXT
   `;
 }
 
 export async function upsertStudentAlias({
   classroomCode,
   username,
+  studentPasscode,
   isActive = true,
 }: {
   classroomCode: string;
   username: string;
+  studentPasscode?: string | null;
   isActive?: boolean;
 }) {
   const normalizedClassroomCode = normalizeClassroomCode(classroomCode);
@@ -85,19 +134,56 @@ export async function upsertStudentAlias({
       id: existing?.id ?? randomUUID(),
       classroomCode: normalizedClassroomCode,
       username: normalizedUsername,
+      studentPasscode: studentPasscode ?? existing?.studentPasscode ?? null,
       isActive,
       createdAt: existing?.createdAt ?? nowIso(),
     };
     return;
   }
 
+  if (studentPasscode) {
+    assertStudentPasscodeStorageReady();
+  }
+
   await ensureAliasTable();
   const sql = getNeonSql();
+  const encryptedPasscode = studentPasscode
+    ? encryptRecoverablePasscode(studentPasscode)
+    : null;
+  if (studentPasscode && !encryptedPasscode) {
+    throw new StockGameError(
+      'Unable to encrypt student passcode for storage.',
+      500,
+    );
+  }
   await sql`
-    INSERT INTO stock_game_student_aliases (id, classroom_code, username, is_active)
-    VALUES (${randomUUID()}, ${normalizedClassroomCode}, ${normalizedUsername}, ${isActive})
+    INSERT INTO stock_game_student_aliases (
+      id,
+      classroom_code,
+      username,
+      student_passcode,
+      student_passcode_encrypted,
+      is_active
+    )
+    VALUES (
+      ${randomUUID()},
+      ${normalizedClassroomCode},
+      ${normalizedUsername},
+      ${null},
+      ${encryptedPasscode},
+      ${isActive}
+    )
     ON CONFLICT (classroom_code, username)
-    DO UPDATE SET is_active = EXCLUDED.is_active
+    DO UPDATE SET
+      student_passcode = CASE
+        WHEN EXCLUDED.student_passcode_encrypted IS NOT NULL THEN NULL
+        ELSE stock_game_student_aliases.student_passcode
+      END,
+      student_passcode_encrypted = COALESCE(
+        EXCLUDED.student_passcode_encrypted,
+        stock_game_student_aliases.student_passcode_encrypted
+      ),
+      is_active = EXCLUDED.is_active
   `;
 }
 
@@ -105,6 +191,7 @@ export async function upsertStudentAliasesBulk(
   entries: Array<{
     classroomCode: string;
     username: string;
+    studentPasscode?: string | null;
     isActive?: boolean;
   }>,
 ) {
@@ -112,10 +199,18 @@ export async function upsertStudentAliasesBulk(
     return;
   }
 
+  if (
+    isNeonConfigured() &&
+    entries.some((entry) => Boolean(entry.studentPasscode))
+  ) {
+    assertStudentPasscodeStorageReady();
+  }
+
   const normalizedEntries = entries.map((entry) => ({
     id: randomUUID(),
     classroomCode: normalizeClassroomCode(entry.classroomCode),
     username: normalizeUsername(entry.username),
+    studentPasscode: entry.studentPasscode ?? null,
     isActive: entry.isActive ?? true,
   }));
 
@@ -128,6 +223,7 @@ export async function upsertStudentAliasesBulk(
         id: existing?.id ?? entry.id,
         classroomCode: entry.classroomCode,
         username: entry.username,
+        studentPasscode: entry.studentPasscode ?? existing?.studentPasscode ?? null,
         isActive: entry.isActive,
         createdAt: existing?.createdAt ?? nowIso(),
       };
@@ -140,19 +236,53 @@ export async function upsertStudentAliasesBulk(
   const ids = normalizedEntries.map((entry) => entry.id);
   const classroomCodes = normalizedEntries.map((entry) => entry.classroomCode);
   const usernames = normalizedEntries.map((entry) => entry.username);
+  const plaintextPlaceholders = normalizedEntries.map(() => null);
+  const encryptedPasscodes = normalizedEntries.map((entry) =>
+    entry.studentPasscode
+      ? encryptRecoverablePasscode(entry.studentPasscode)
+      : null,
+  );
+  if (
+    normalizedEntries.some(
+      (entry, index) => entry.studentPasscode && !encryptedPasscodes[index],
+    )
+  ) {
+    throw new StockGameError(
+      'Unable to encrypt student passcodes for storage.',
+      500,
+    );
+  }
   const isActiveValues = normalizedEntries.map((entry) => entry.isActive);
 
   await sql`
-    INSERT INTO stock_game_student_aliases (id, classroom_code, username, is_active)
+    INSERT INTO stock_game_student_aliases (
+      id,
+      classroom_code,
+      username,
+      student_passcode,
+      student_passcode_encrypted,
+      is_active
+    )
     SELECT *
     FROM UNNEST(
       ${ids}::text[],
       ${classroomCodes}::text[],
       ${usernames}::text[],
+      ${plaintextPlaceholders}::text[],
+      ${encryptedPasscodes}::text[],
       ${isActiveValues}::boolean[]
     )
     ON CONFLICT (classroom_code, username)
-    DO UPDATE SET is_active = EXCLUDED.is_active
+    DO UPDATE SET
+      student_passcode = CASE
+        WHEN EXCLUDED.student_passcode_encrypted IS NOT NULL THEN NULL
+        ELSE stock_game_student_aliases.student_passcode
+      END,
+      student_passcode_encrypted = COALESCE(
+        EXCLUDED.student_passcode_encrypted,
+        stock_game_student_aliases.student_passcode_encrypted
+      ),
+      is_active = EXCLUDED.is_active
   `;
 }
 
@@ -217,7 +347,14 @@ export async function listStudentAliasesByClassroom(classroomCode: string) {
   await ensureAliasTable();
   const sql = getNeonSql();
   const rows = await sql`
-    SELECT id, classroom_code, username, is_active, created_at
+    SELECT
+      id,
+      classroom_code,
+      username,
+      student_passcode,
+      student_passcode_encrypted,
+      is_active,
+      created_at
     FROM stock_game_student_aliases
     WHERE classroom_code = ${normalizedClassroomCode}
     ORDER BY username ASC
@@ -235,6 +372,7 @@ export async function listStudentAliasesByClassroom(classroomCode: string) {
         id: String(row.id ?? ''),
         classroomCode: String(row.classroom_code ?? normalizedClassroomCode),
         username: String(row.username ?? ''),
+        studentPasscode: readPasscodeFromRow(row),
         isActive: Boolean(row.is_active),
         createdAt: new Date(String(row.created_at ?? nowIso())).toISOString(),
       })),
@@ -244,4 +382,8 @@ export async function listStudentAliasesByClassroom(classroomCode: string) {
 
 export function __resetStudentAliasStore() {
   delete globalThis.__econSimsStudentAliasStore;
+}
+
+export function verifyStudentAliasPasscodeStorage() {
+  assertStudentPasscodeStorageReady();
 }

@@ -5,6 +5,10 @@ export type GeneratedCredential = {
 
 type PrintPopupLike = Pick<Window, 'document' | 'location' | 'focus' | 'print'>;
 type UrlApi = Pick<typeof URL, 'createObjectURL' | 'revokeObjectURL'>;
+type PopupEventApi = {
+  addEventListener?: (event: string, listener: () => void) => void;
+  removeEventListener?: (event: string, listener: () => void) => void;
+};
 
 function escapeHtml(value: string) {
   return value
@@ -95,7 +99,7 @@ export function buildCredentialCardsHtml(
       </head>
       <body>
         <h1>Student Credential Cards</h1>
-        <p class="meta">Classroom ${escapeHtml(classroomCode)} • ${credentials.length} students</p>
+        <p class="meta">Classroom ${escapeHtml(classroomCode)} &bull; ${credentials.length} students</p>
         <section class="grid">${cardsMarkup}</section>
         <!-- print triggered by parent window after document.close() -->
       </body>
@@ -104,7 +108,7 @@ export function buildCredentialCardsHtml(
 }
 
 export function writeAndPrintCredentialCards(
-  popup: PrintPopupLike,
+  popup: PrintPopupLike & PopupEventApi,
   classroomCode: string,
   credentials: GeneratedCredential[],
   delayMs = 400,
@@ -113,6 +117,30 @@ export function writeAndPrintCredentialCards(
 ) {
   const html = buildCredentialCardsHtml(classroomCode, credentials);
   let cleanupBlobUrl: string | null = null;
+  let hasTriggeredPrint = false;
+
+  const cleanup = () => {
+    if (cleanupBlobUrl) {
+      urlApi.revokeObjectURL(cleanupBlobUrl);
+      cleanupBlobUrl = null;
+    }
+  };
+
+  const triggerPrint = () => {
+    if (hasTriggeredPrint) {
+      return;
+    }
+
+    hasTriggeredPrint = true;
+    popup.focus();
+    popup.print();
+    cleanup();
+  };
+
+  const handleLoad = () => {
+    popup.removeEventListener?.('load', handleLoad);
+    triggerPrint();
+  };
 
   try {
     popup.document.open();
@@ -126,14 +154,6 @@ export function writeAndPrintCredentialCards(
     popup.location.href = cleanupBlobUrl;
   }
 
-  schedule(
-    () => {
-      popup.focus();
-      popup.print();
-      if (cleanupBlobUrl) {
-        urlApi.revokeObjectURL(cleanupBlobUrl);
-      }
-    },
-    delayMs + (cleanupBlobUrl ? 250 : 0),
-  );
+  popup.addEventListener?.('load', handleLoad);
+  schedule(triggerPrint, delayMs + (cleanupBlobUrl ? 600 : 0));
 }

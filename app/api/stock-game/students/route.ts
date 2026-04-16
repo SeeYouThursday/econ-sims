@@ -6,6 +6,7 @@ import {
   setStudentAliasActive,
   upsertStudentAlias,
   upsertStudentAliasesBulk,
+  verifyStudentAliasPasscodeStorage,
 } from '@/lib/studentAliasStore';
 import {
   createStudent,
@@ -67,6 +68,8 @@ type InternalRosterStudent = {
   hasActiveSession: boolean;
 };
 
+type StockRosterStudent = Omit<InternalRosterStudent, 'studentPasscode'>;
+
 type RosterStudent = Omit<InternalRosterStudent, 'studentPasscode'>;
 
 type RosterResponse = {
@@ -82,15 +85,17 @@ function buildRosterStudent(
   alias: {
     id: string;
     username: string;
+    studentPasscode: string | null;
     createdAt: string;
     isActive: boolean;
   },
-  stock?: InternalRosterStudent,
+  stock?: StockRosterStudent,
 ): InternalRosterStudent {
   if (stock) {
     return {
       ...stock,
       studentId: stock.studentId || alias.id,
+      studentPasscode: alias.studentPasscode,
       createdAt: stock.createdAt || alias.createdAt,
       isActive: alias.isActive,
     };
@@ -99,7 +104,7 @@ function buildRosterStudent(
   return {
     studentId: alias.id,
     username: alias.username,
-    studentPasscode: null,
+    studentPasscode: alias.studentPasscode,
     createdAt: alias.createdAt,
     isActive: alias.isActive,
     cash: 0,
@@ -119,13 +124,14 @@ function buildRosterResponse({
   aliases: Array<{
     id: string;
     username: string;
+    studentPasscode: string | null;
     createdAt: string;
     isActive: boolean;
   }>;
   storage: string;
   stockRoster: {
     asOf: string;
-    students: InternalRosterStudent[];
+    students: StockRosterStudent[];
   } | null;
 }) {
   const stockByUsername = new Map(
@@ -309,6 +315,43 @@ async function createStudentsBatchWithTeacherResync(
   }
 }
 
+async function rollbackCreatedStudents({
+  classroomCode,
+  teacherPasscode,
+  teacherUserId,
+  usernames,
+}: {
+  classroomCode: string;
+  teacherPasscode?: string;
+  teacherUserId: string | null;
+  usernames: string[];
+}) {
+  for (const username of usernames) {
+    try {
+      await runWithTeacherClassroomResync({
+        classroomCode,
+        teacherUserId,
+        run: async () =>
+          deleteStudent({
+            classroomCode,
+            teacherPasscode,
+            teacherUserId: teacherUserId ?? undefined,
+            username,
+          }),
+      });
+    } catch (rollbackError) {
+      console.error('[stock-game][students] rollback_failed', {
+        classroomCode,
+        username,
+        error:
+          rollbackError instanceof Error
+            ? rollbackError.message
+            : String(rollbackError),
+      });
+    }
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CreateStudentBody;
@@ -328,22 +371,30 @@ export async function POST(request: Request) {
       });
     }
 
+    verifyStudentAliasPasscodeStorage();
+
     if (Array.isArray(body.students)) {
       const result = await createStudentsBatchWithTeacherResync(
         body,
         teacherUserId,
       );
-
       try {
         await upsertStudentAliasesBulk(
           result.students.map((student) => ({
             classroomCode: student.classroomCode,
             username: student.username,
+            studentPasscode: student.studentPasscode ?? null,
             isActive: true,
           })),
         );
-      } catch {
-        // Alias registry sync is best-effort and should not block student creation.
+      } catch (error) {
+        await rollbackCreatedStudents({
+          classroomCode: body.classroomCode ?? '',
+          teacherPasscode: body.teacherPasscode,
+          teacherUserId,
+          usernames: result.students.map((student) => student.username),
+        });
+        throw error;
       }
 
       return NextResponse.json(result, { status: 201 });
@@ -354,10 +405,17 @@ export async function POST(request: Request) {
       await upsertStudentAlias({
         classroomCode: student.classroomCode,
         username: student.username,
+        studentPasscode: student.studentPasscode ?? null,
         isActive: true,
       });
-    } catch {
-      // Alias registry sync is best-effort and should not block student creation.
+    } catch (error) {
+      await rollbackCreatedStudents({
+        classroomCode: body.classroomCode ?? '',
+        teacherPasscode: body.teacherPasscode,
+        teacherUserId,
+        usernames: [student.username],
+      });
+      throw error;
     }
 
     return NextResponse.json(student, { status: 201 });
@@ -514,7 +572,7 @@ export async function GET(request: Request) {
 
     let stockRoster: {
       asOf: string;
-      students: InternalRosterStudent[];
+      students: StockRosterStudent[];
     } | null = null;
     try {
       stockRoster = await runWithTeacherClassroomResync({
