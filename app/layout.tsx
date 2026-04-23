@@ -4,7 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 // import SiteHeader from '@/components/SiteHeader';
-import AltHeader from '@/components/ui/AltHeader';
+import NavHeader from '@/components/ui/NavHeader';
 import Footer from '@/components/Footer';
 import { isTeacherAdminUserId } from '@/lib/adminAccess';
 import { isClerkConfigured } from '@/lib/clerk';
@@ -44,7 +44,7 @@ export default async function RootLayout({
         clerkEnabled={clerkEnabled}
         showTeacherApprovalLink={showTeacherApprovalLink}
       /> */}
-      <AltHeader
+      <NavHeader
         clerkEnabled={clerkEnabled}
         showTeacherApprovalLink={showTeacherApprovalLink}
       />

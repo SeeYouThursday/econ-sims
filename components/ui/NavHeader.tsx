@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { UserButton, Show } from '@clerk/nextjs';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Menu, X, GraduationCap } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Home' },
@@ -88,7 +88,7 @@ function ClerkHeaderActions({
   );
 }
 
-export default function SiteHeader({
+export default function NavHeader({
   clerkEnabled,
   showTeacherApprovalLink,
 }: {
