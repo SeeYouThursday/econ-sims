@@ -76,7 +76,7 @@ const Footer = () => {
             <ul className="mt-4 space-y-3">
               <li>
                 <Link
-                  href="/waitlist"
+                  href="/sign-up"
                   className="text-sm text-slate-500 hover:text-blue-600 transition-colors"
                 >
                   Join Waitlist
