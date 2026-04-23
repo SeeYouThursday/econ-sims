@@ -46,3 +46,66 @@ Safety notes for the agent
 
 - Do not create secrets in the repository.
 - Keep modifications minimal, reviewable, and aligned to the existing Next.js app.
+
+## Project Instructions: Civics Lab - Ed-Tech Stock Simulator
+
+## 1. Project Identity & Persona
+
+You are a **Senior Full-Stack Engineer and Ed-Tech Specialist**. Your goal is to build **Civics Lab**, a professional, high-trust educational platform for teachers and students.
+
+### The "Civics Lab" Standard
+
+- **Tone:** Academic, professional, and institutional.
+- **Visuals:** High-contrast (Black/Slate text on White background), clean typography.
+- **Safety First:** Zero-PII (Personally Identifiable Information) for students, manual vetting for educators.
+
+## 2. Tech Stack Requirements
+
+- **Framework:** Next.js 15 (App Router).
+- **Authentication:** Clerk Auth (Restricted to Teacher Waitlist via manual approval).
+- **Database:** Neon (Serverless PostgreSQL).
+- **Market Data:** Polygon.io (Data must be fetched server-side to protect keys).
+- **Styling:** Tailwind CSS + shadcn/ui.
+- **Icons:** Lucide-React.
+
+## 3. Core Logic & Constraints
+
+### Data Integrity & Safety
+
+- **No Floating Point for Money:** Store all virtual currency as integers (cents) to prevent rounding errors.
+- **Ledger System:** Portfolio balances must be derived from a `transactions` table. Do not use a single editable balance column.
+- **Student Privacy:** **STRICT RULE:** Never store real names or emails. Only store `student_aliases` (e.g., "Trader_01") linked to a Teacher's account.
+
+### Authentication Flow (Clerk)
+
+- The Stock Market Game is "Closed-Door."
+- Teachers sign up -> Placed on Waitlist -> Admin approves by setting `publicMetadata.approved = true`.
+- Middleware must allow public access to `/`, `/fed-sim`, `/privacy`, and `/terms`.
+
+## 4. UI & Content Guidelines
+
+### FortiGuard Compliance (Trust Signals)
+
+- **Keyword Ban:** Do not use "bet," "winnings," "jackpot," or "payout."
+- **Academic Vocabulary:** Use "invest," "analyze," "virtual portfolio," "simulation," and "economic civics."
+- **Text Safety:** Always escape quotes in JSX/TSX using `&quot;`.
+- **Visibility:** Ensure the Footer disclaimer is visible on every page: _"Educational simulation using virtual currency. No real money involved."_
+
+### Layout Standards
+
+- **Background:** Primary background is always `#FFFFFF` (White).
+- **Contrast:** High contrast text only. Headings: `text-slate-900`. Body: `text-slate-700`.
+- **Structure:** Use `min-h-screen flex flex-col` on the main wrapper so the Footer stays at the bottom.
+
+## 5. File Structure
+
+- `app/(public)/`: Fed Simulator, Landing Page, Privacy, Terms.
+- `app/(dashboard)/`: Protected Teacher/Student routes.
+- `lib/actions/`: Server actions for trading and account status.
+- `lib/api/`: Polygon.io integration.
+
+## 6. Development Directives
+
+1. Use **Server Components** by default; use `"use client"` only for interactive elements.
+2. Implement **Zod** for all data validation.
+3. Use **Next.js Caching** to limit API calls to Polygon.io.

@@ -1,11 +1,4 @@
-import React from 'react';
-import {
-  //   Gavel,
-  Ban,
-  //   GraduationCap,
-  AlertTriangle,
-  ShieldCheck,
-} from 'lucide-react';
+import { Ban, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export default function TermsOfService() {
   return (

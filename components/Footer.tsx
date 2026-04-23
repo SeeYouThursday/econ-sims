@@ -1,5 +1,5 @@
-import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { BarChart3, GraduationCap, ShieldCheck, Gavel } from 'lucide-react';
 
 const Footer = () => {
@@ -9,9 +9,14 @@ const Footer = () => {
         {/* Brand and Disclaimer */}
         <div className="space-y-6 md:w-1/3">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="h-8 w-8 rounded bg-blue-600 flex items-center justify-center text-white font-bold group-hover:bg-blue-700 transition-colors">
-              G
-            </div>
+            <Image
+              src="/alt-logo.png"
+              height="26"
+              width="26"
+              quality={75}
+              alt="Mr. G's Civics Lab logo"
+              className="rounded-md"
+            />
             <span className="text-xl font-bold tracking-tight text-slate-900">
               Mr. G&apos;s Civics Lab
             </span>
@@ -78,12 +83,13 @@ const Footer = () => {
                 </Link>
               </li>
               {/* TODO: Future Dev */}
-              <li className="hidden">
+              <li>
                 <Link
-                  href="/docs"
+                  href="/curriculum"
                   className="text-sm text-slate-500 hover:text-blue-600 transition-colors"
                 >
-                  Curriculum Guide
+                  Curriculum Guide <br />
+                  <span> Coming Soon!</span>
                 </Link>
               </li>
             </ul>
@@ -119,8 +125,8 @@ const Footer = () => {
       {/* Bottom Bar */}
       <div className="mx-auto max-w-7xl px-6 py-8 border-t border-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
         <p className="text-xs text-slate-400">
-          &copy; {new Date().getFullYear()} Civics Lab. Supporting teachers and
-          student.
+          &copy; {new Date().getFullYear()}{' '}
+          <span>Mr. G&apos;s Civics Lab. Supporting teachers and student.</span>
         </p>
         <div className="flex items-center gap-4">
           <span className="inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 ring-1 ring-inset ring-green-600/20">

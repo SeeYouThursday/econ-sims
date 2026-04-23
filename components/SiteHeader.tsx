@@ -118,7 +118,8 @@ export default function SiteHeader({
           href="/"
           className="text-lg font-black tracking-[0.2em] text-slate-900 sm:text-xl"
         >
-          Mr. G&apos;s Civics Lab
+          Mr. G&apos;s <br />
+          Civics Lab
         </Link>
 
         <nav className="hidden items-center gap-6 lg:flex">
