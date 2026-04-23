@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { SubmitEvent, useEffect, useMemo, useState } from 'react';
 
 type ApprovalResponse = {
   error?: string;
@@ -89,7 +89,7 @@ export default function TeacherApprovalAdminClient() {
     }
   };
 
-  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const onSubmit = (event: SubmitEvent) => {
     event.preventDefault();
   };
 

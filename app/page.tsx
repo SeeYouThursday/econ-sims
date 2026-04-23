@@ -63,7 +63,7 @@ const Page = () => {
                   Try the Fed simulator
                 </Link>
                 <Link
-                  href="/waitlist"
+                  href="/sign-up"
                   className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-8 py-4 text-sm font-bold uppercase tracking-wider text-slate-900 transition hover:bg-slate-50"
                 >
                   Join Waitlist
@@ -144,7 +144,7 @@ const Page = () => {
           </p>
           <div className="mt-10">
             <Link
-              href="/waitlist"
+              href="/sign-up"
               className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-sm font-bold uppercase tracking-widest text-white transition hover:bg-blue-500"
             >
               Get Started for Free <ArrowRight size={18} />
