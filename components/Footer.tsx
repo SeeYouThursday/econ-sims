@@ -51,7 +51,7 @@ const Footer = () => {
             <ul className="mt-4 space-y-3">
               <li>
                 <Link
-                  href="/fed-sim"
+                  href="/fed-simulator"
                   className="text-sm text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-1"
                 >
                   Fed Simulator
@@ -59,7 +59,7 @@ const Footer = () => {
               </li>
               <li>
                 <Link
-                  href="/market"
+                  href="/stock"
                   className="text-sm text-slate-500 hover:text-blue-600 transition-colors"
                 >
                   Stock Market Game
