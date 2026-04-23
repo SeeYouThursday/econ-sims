@@ -51,7 +51,7 @@ const Footer = () => {
             <ul className="mt-4 space-y-3">
               <li>
                 <Link
-                  href="/fed-sim"
+                  href="/fed-simulator"
                   className="text-sm text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-1"
                 >
                   Fed Simulator
@@ -59,7 +59,7 @@ const Footer = () => {
               </li>
               <li>
                 <Link
-                  href="/market"
+                  href="/stock"
                   className="text-sm text-slate-500 hover:text-blue-600 transition-colors"
                 >
                   Stock Market Game
@@ -124,7 +124,7 @@ const Footer = () => {
 
       {/* Bottom Bar */}
       <div className="mx-auto max-w-7xl px-6 py-8 border-t border-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-700">
           &copy; {new Date().getFullYear()}{' '}
           <span>Mr. G&apos;s Civics Lab. Supporting teachers and student.</span>
         </p>
