@@ -154,6 +154,7 @@ export default function NavHeader({
         {/* Mobile Toggle */}
         <button
           type="button"
+          aria-label="open menu"
           onClick={() => setMenuOpen((open) => !open)}
           className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-800 transition hover:bg-slate-50 lg:hidden"
         >
