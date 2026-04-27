@@ -206,7 +206,7 @@ export default function FedGame() {
       eInf = e.i;
       eUnp = e.u;
     } else {
-      setNews('The economy remains steady this quarter.');
+      setNews('');
     }
 
     const nextInf = Math.max(
@@ -434,14 +434,16 @@ export default function FedGame() {
             </div>
 
             <div className="flex-1 bg-slate-900 rounded-4xl p-6 text-white flex flex-col justify-between shadow-2xl">
-              <div className="text-center bg-slate-800/50 p-3 rounded-2xl border border-slate-700">
-                <p className="text-blue-400 font-black text-[9px] tracking-[0.2em] uppercase mb-1">
-                  Briefing
-                </p>
-                <p className="text-sm font-medium italic opacity-90 leading-tight">
-                  &quot;{news}&quot;
-                </p>
-              </div>
+              {news ? (
+                <div className="text-center bg-slate-800/50 p-3 rounded-2xl border border-slate-700">
+                  <p className="text-blue-400 font-black text-[9px] tracking-[0.2em] uppercase mb-1">
+                    Briefing
+                  </p>
+                  <p className="text-sm font-medium italic opacity-90 leading-tight">
+                    `&quot;{news}&quot;`
+                  </p>
+                </div>
+              ) : null}
 
               <div className="space-y-4">
                 <div className="flex justify-between items-end px-1">

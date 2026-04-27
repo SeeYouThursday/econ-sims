@@ -99,6 +99,7 @@ const ReportCard: React.FC<ReportCardProps> = ({ history, onRestart }) => {
       </div>
 
       <button
+        type="reset"
         onClick={onRestart}
         className="flex items-center gap-2 bg-slate-900 text-white px-10 py-4 rounded-full font-bold hover:bg-black transition shadow-xl"
       >
