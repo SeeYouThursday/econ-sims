@@ -52,7 +52,7 @@ export default function FedSimulatorInfoPanel() {
         <div
           ref={dialogRef}
           tabIndex={-1}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 focus:outline-none"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 focus:outline-none overflow-scroll"
           role="dialog"
           aria-modal="true"
           aria-labelledby="fed-instructions-title"
@@ -96,19 +96,8 @@ export default function FedSimulatorInfoPanel() {
 
             <ol className="mt-6 list-decimal space-y-3 pl-5 text-sm leading-7 text-slate-700">
               <li>
-                Check{' '}
-                <Tooltip text={INFLATION_TOOLTIP}>
-                  <span className="cursor-help underline decoration-dotted decoration-red-300">
-                    inflation
-                  </span>
-                </Tooltip>{' '}
-                and{' '}
-                <Tooltip text={UNEMPLOYMENT_TOOLTIP}>
-                  <span className="cursor-help underline decoration-dotted decoration-blue-300">
-                    unemployment
-                  </span>
-                </Tooltip>{' '}
-                in the control panel.
+                Check <strong>inflation</strong> and
+                <strong> unemployment</strong> in the control panel.
               </li>
               <li>Set the interest rate with the slider for this quarter.</li>
               <li>
@@ -117,19 +106,8 @@ export default function FedSimulatorInfoPanel() {
               </li>
               <li>Use the chart and year summary to track policy impact.</li>
               <li>
-                Aim to keep{' '}
-                <Tooltip text={INFLATION_TOOLTIP}>
-                  <span className="cursor-help underline decoration-dotted decoration-red-300">
-                    inflation
-                  </span>
-                </Tooltip>{' '}
-                near 2.0% and{' '}
-                <Tooltip text={UNEMPLOYMENT_TOOLTIP}>
-                  <span className="cursor-help underline decoration-dotted decoration-blue-300">
-                    unemployment
-                  </span>
-                </Tooltip>{' '}
-                near 5.0% by year 4.
+                Aim to keep inflation near 2.0% and unemployment near 5.0% by
+                year 4.
               </li>
             </ol>
 
