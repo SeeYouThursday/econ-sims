@@ -64,7 +64,7 @@ const ReportCard: React.FC<ReportCardProps> = ({ history, onRestart }) => {
   const grade = getGrade(totalError);
 
   return (
-    <div className="absolute inset-0 bg-white/98 z-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in duration-300">
+    <div className="inset-0 bg-white/98 z-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in duration-300">
       <div className={`p-4 rounded-full ${grade.bg} ${grade.color} mb-4`}>
         {grade.icon}
       </div>

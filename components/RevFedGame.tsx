@@ -332,13 +332,14 @@ export default function FedGame() {
               startUnemployment={yearSummary.startEntry?.unp}
             />
 
-            <div className="flex-1 min-w-0 min-h-0 relative">
+            <div className="min-h-48 min-w-full relative">
               {isChartReady ? (
                 <ResponsiveContainer
                   width="100%"
                   height="100%"
                   minWidth={3}
                   minHeight={1}
+                  aspect={undefined}
                 >
                   <LineChart
                     data={history}
@@ -404,7 +405,7 @@ export default function FedGame() {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full w-full rounded-3xl bg-slate-100" />
+                <div className="h-96 w-96 rounded-3xl bg-slate-100" />
               )}
             </div>
           </div>
