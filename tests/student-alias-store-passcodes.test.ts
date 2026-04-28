@@ -29,7 +29,6 @@ describe('student alias store passcode persistence', () => {
             id: 'alias_1',
             classroom_code: 'ABC123',
             username: 'student_01',
-            student_passcode: 'LEGACY123',
             student_passcode_encrypted:
               encryptRecoverablePasscode('SAFE1234'),
             is_active: true,
@@ -58,7 +57,7 @@ describe('student alias store passcode persistence', () => {
     expect(result.aliases[0]?.classroomCode).toBe('ABC123');
   });
 
-  it('falls back to legacy plaintext passcodes when encrypted values are absent', async () => {
+  it('returns null when encrypted values are absent', async () => {
     const sql = vi.fn(async (strings: TemplateStringsArray) => {
       const query = strings.join(' ');
 
@@ -68,7 +67,6 @@ describe('student alias store passcode persistence', () => {
             id: 'alias_2',
             classroom_code: 'ABC123',
             username: 'student_02',
-            student_passcode: 'PLAIN5678',
             student_passcode_encrypted: null,
             is_active: true,
             created_at: '2026-04-16T12:00:00.000Z',
@@ -91,7 +89,7 @@ describe('student alias store passcode persistence', () => {
     const result = await listStudentAliasesByClassroom('ABC123');
 
     expect(result.aliases).toHaveLength(1);
-    expect(result.aliases[0]?.studentPasscode).toBe('PLAIN5678');
+    expect(result.aliases[0]?.studentPasscode).toBeNull();
   });
 
   it('stores new database passcodes in encrypted form instead of plaintext', async () => {
@@ -133,7 +131,6 @@ describe('student alias store passcode persistence', () => {
     expect(insertValues).toContain('ABC123');
     expect(insertValues).toContain('student_03');
     expect(insertValues).toContain(true);
-    expect(insertValues).toContain(null);
     expect(insertValues).not.toContain('HIDE9999');
 
     const encryptedValue = insertValues.find(

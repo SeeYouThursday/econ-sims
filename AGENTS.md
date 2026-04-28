@@ -109,3 +109,12 @@ You are a **Senior Full-Stack Engineer and Ed-Tech Specialist**. Your goal is to
 1. Use **Server Components** by default; use `"use client"` only for interactive elements.
 2. Implement **Zod** for all data validation.
 3. Use **Next.js Caching** to limit API calls to Polygon.io.
+
+## 7. Pre-Commit Review Subagent
+
+- Before any commit, spawn a dedicated read-only review subagent to inspect the staged diff.
+- Prefer an `explorer` subagent when the host runtime supports it. Otherwise use a `default` subagent with the same review brief.
+- Use the review brief in `.agents/reviewers/pre-commit-review.md` as the subagent prompt.
+- Have the reviewer inspect `git diff --cached` first. If nothing is staged, it should say that the pre-commit review could not run on a commit candidate and stop unless the parent agent provides an explicit review scope.
+- The reviewer should focus on bugs, regressions, auth/privacy risks, data-integrity issues, and missing or weak test coverage.
+- The reviewer must not edit files. It should return findings first with severity and file/line references, then open questions or assumptions, and only then a short commit-readiness summary.
