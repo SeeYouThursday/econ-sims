@@ -55,17 +55,8 @@ function makeKey(classroomCode: string, username: string) {
 }
 
 function readPasscodeFromRow(row: Record<string, unknown>) {
-  const encryptedPasscode =
-    typeof row.student_passcode_encrypted === 'string'
-      ? decryptRecoverablePasscode(row.student_passcode_encrypted)
-      : null;
-
-  if (encryptedPasscode) {
-    return encryptedPasscode;
-  }
-
-  return typeof row.student_passcode === 'string'
-    ? row.student_passcode
+  return typeof row.student_passcode_encrypted === 'string'
+    ? decryptRecoverablePasscode(row.student_passcode_encrypted)
     : null;
 }
 
@@ -93,7 +84,6 @@ async function ensureAliasTable() {
       id TEXT PRIMARY KEY,
       classroom_code TEXT NOT NULL,
       username TEXT NOT NULL,
-      student_passcode TEXT,
       student_passcode_encrypted TEXT,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -103,12 +93,12 @@ async function ensureAliasTable() {
 
   await sql`
     ALTER TABLE stock_game_student_aliases
-    ADD COLUMN IF NOT EXISTS student_passcode TEXT
+    ADD COLUMN IF NOT EXISTS student_passcode_encrypted TEXT
   `;
 
   await sql`
     ALTER TABLE stock_game_student_aliases
-    ADD COLUMN IF NOT EXISTS student_passcode_encrypted TEXT
+    DROP COLUMN IF EXISTS student_passcode
   `;
 }
 
@@ -161,7 +151,6 @@ export async function upsertStudentAlias({
       id,
       classroom_code,
       username,
-      student_passcode,
       student_passcode_encrypted,
       is_active
     )
@@ -169,16 +158,11 @@ export async function upsertStudentAlias({
       ${randomUUID()},
       ${normalizedClassroomCode},
       ${normalizedUsername},
-      ${null},
       ${encryptedPasscode},
       ${isActive}
     )
     ON CONFLICT (classroom_code, username)
     DO UPDATE SET
-      student_passcode = CASE
-        WHEN EXCLUDED.student_passcode_encrypted IS NOT NULL THEN NULL
-        ELSE stock_game_student_aliases.student_passcode
-      END,
       student_passcode_encrypted = COALESCE(
         EXCLUDED.student_passcode_encrypted,
         stock_game_student_aliases.student_passcode_encrypted
@@ -236,7 +220,6 @@ export async function upsertStudentAliasesBulk(
   const ids = normalizedEntries.map((entry) => entry.id);
   const classroomCodes = normalizedEntries.map((entry) => entry.classroomCode);
   const usernames = normalizedEntries.map((entry) => entry.username);
-  const plaintextPlaceholders = normalizedEntries.map(() => null);
   const encryptedPasscodes = normalizedEntries.map((entry) =>
     entry.studentPasscode
       ? encryptRecoverablePasscode(entry.studentPasscode)
@@ -259,7 +242,6 @@ export async function upsertStudentAliasesBulk(
       id,
       classroom_code,
       username,
-      student_passcode,
       student_passcode_encrypted,
       is_active
     )
@@ -268,16 +250,11 @@ export async function upsertStudentAliasesBulk(
       ${ids}::text[],
       ${classroomCodes}::text[],
       ${usernames}::text[],
-      ${plaintextPlaceholders}::text[],
       ${encryptedPasscodes}::text[],
       ${isActiveValues}::boolean[]
     )
     ON CONFLICT (classroom_code, username)
     DO UPDATE SET
-      student_passcode = CASE
-        WHEN EXCLUDED.student_passcode_encrypted IS NOT NULL THEN NULL
-        ELSE stock_game_student_aliases.student_passcode
-      END,
       student_passcode_encrypted = COALESCE(
         EXCLUDED.student_passcode_encrypted,
         stock_game_student_aliases.student_passcode_encrypted
@@ -351,7 +328,6 @@ export async function listStudentAliasesByClassroom(classroomCode: string) {
       id,
       classroom_code,
       username,
-      student_passcode,
       student_passcode_encrypted,
       is_active,
       created_at

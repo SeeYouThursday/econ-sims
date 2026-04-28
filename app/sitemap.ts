@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://www.civicslab.pro';
+  const baseUrl = 'https://www.civicsandmoney.com';
 
   // Define your public-facing routes
   // Disclude /admin or /teacher routes as they shouldn't be indexed

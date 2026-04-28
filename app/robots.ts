@@ -19,6 +19,6 @@ export default function robots(): MetadataRoute.Robots {
       },
     ],
     // If you have a sitemap (highly recommended for trust), link it here
-    sitemap: 'https://www.civicslab.pro/sitemap.xml',
+    sitemap: 'https://www.civicsandmoney.com/sitemap.xml',
   };
 }
