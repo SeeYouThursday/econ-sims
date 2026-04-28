@@ -74,7 +74,7 @@ export default function TermsOfService() {
               Questions about our &quot;Terms&quot;?
             </p>
             <a
-              href="mailto:admin@civicslab.pro"
+              href="mailto:mrgscivicslab@gmail.com"
               className="text-lg font-bold text-blue-600 hover:text-blue-800"
             >
               mrgscivicslab@gmail.com

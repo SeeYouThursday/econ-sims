@@ -26,7 +26,9 @@ export default function PrivacyPolicy() {
             </div>
             <p className="text-lg leading-relaxed text-slate-700">
               Civics Lab (
-              <span className="font-semibold underline">www.civicslab.pro</span>
+              <span className="font-semibold underline">
+                www.civicsandmoney.com
+              </span>
               ) is a non-commercial educational resource. Our mission is to
               provide students and educators with a safe, simulated environment
               to learn about financial markets and economic civics without any
@@ -120,7 +122,7 @@ export default function PrivacyPolicy() {
               verification questions, please contact the administrator at:
             </p>
             <a
-              href="mailto:admin@civicslab.pro"
+              href="mailto:mrgscivicslab@gmail.com"
               className="text-xl font-bold text-blue-600 hover:text-blue-800 underline decoration-2 underline-offset-4"
             >
               mrgscivicslab@gmail.com
