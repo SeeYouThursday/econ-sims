@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { TeacherAuthError, requireTeacherAuth } from '@/lib/clerk';
+import { clientIpKey, enforceRateLimit, rateLimitKey } from '@/lib/rateLimit';
 import {
   createTeacherClassroom,
   listTeacherClassrooms,
@@ -26,6 +27,12 @@ export async function GET() {
     if (!teacherUserId) {
       throw new TeacherAuthError('Teacher sign-in is required.', 401);
     }
+    const rateLimited = await enforceRateLimit({
+      key: rateLimitKey('teacher-classrooms-read', teacherUserId),
+      limit: 60,
+      windowSeconds: 60,
+    });
+    if (rateLimited) return rateLimited;
 
     const classrooms = await listTeacherClassrooms(teacherUserId);
     return NextResponse.json(classrooms);
@@ -55,6 +62,13 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as CreateTeacherClassroomBody;
+    const rateLimited = await enforceRateLimit({
+      key: rateLimitKey('teacher-classrooms-write', teacherUserId),
+      limit: 50,
+      windowSeconds: 60,
+    });
+    if (rateLimited) return rateLimited;
+
     const classroom = await createTeacherClassroom(
       teacherUserId,
       body.title ?? '',
@@ -98,6 +112,17 @@ export async function PATCH(request: Request) {
     }
 
     const body = (await request.json()) as UpdateTeacherClassroomBody;
+    const rateLimited = await enforceRateLimit({
+      key: rateLimitKey(
+        'teacher-classrooms-write',
+        teacherUserId || clientIpKey(request),
+        body.classroomCode,
+      ),
+      limit: 30,
+      windowSeconds: 60,
+    });
+    if (rateLimited) return rateLimited;
+
     const classroom = await updateTeacherClassroomStartingCash(
       teacherUserId,
       body.classroomCode ?? '',

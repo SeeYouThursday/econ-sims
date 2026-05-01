@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { TeacherAuthError, requireTeacherAuth } from '@/lib/clerk';
+import { clientIpKey, enforceRateLimit, rateLimitKey } from '@/lib/rateLimit';
 import { assertTeacherOwnsClassroom } from '@/lib/teacherStore';
 import {
   ensureTeacherClassroom,
@@ -80,6 +81,16 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as AuditBody;
     const teacherUserId = await requireTeacherAuth();
+    const rateLimited = await enforceRateLimit({
+      key: rateLimitKey(
+        'teacher-audit',
+        teacherUserId || clientIpKey(request),
+        body.classroomCode,
+      ),
+      limit: 30,
+      windowSeconds: 60,
+    });
+    if (rateLimited) return rateLimited;
 
     if (teacherUserId) {
       const classroom = await assertTeacherOwnsClassroom(

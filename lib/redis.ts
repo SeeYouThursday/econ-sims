@@ -7,6 +7,8 @@ type RedisAdapter = {
   get: (key: string) => Promise<string | null>;
   set: (key: string, value: string) => Promise<unknown>;
   setEx: (key: string, seconds: number, value: string) => Promise<unknown>;
+  incr: (key: string) => Promise<number>;
+  expire: (key: string, seconds: number) => Promise<number>;
   del: (key: string) => Promise<number>;
 };
 
@@ -73,6 +75,14 @@ function getUpstashAdapter(): RedisAdapter {
     setEx: async (key: string, seconds: number, value: string) => {
       return client.set(key, value, { ex: seconds });
     },
+    incr: async (key: string) => {
+      const count = await client.incr(key);
+      return typeof count === 'number' ? count : Number(count ?? 0);
+    },
+    expire: async (key: string, seconds: number) => {
+      const result = await client.expire(key, seconds);
+      return typeof result === 'number' ? result : result ? 1 : 0;
+    },
     del: async (key: string) => {
       const deleted = await client.del(key);
       return typeof deleted === 'number' ? deleted : Number(deleted ?? 0);
@@ -86,6 +96,8 @@ function getNodeRedisAdapter(client: EconSimsRedisClient): RedisAdapter {
     set: (key: string, value: string) => client.set(key, value),
     setEx: (key: string, seconds: number, value: string) =>
       client.setEx(key, seconds, value),
+    incr: (key: string) => client.incr(key),
+    expire: (key: string, seconds: number) => client.expire(key, seconds),
     del: (key: string) => client.del(key),
   };
 }

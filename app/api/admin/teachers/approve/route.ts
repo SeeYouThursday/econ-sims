@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { AdminAccessError, requireTeacherAdminUser } from '@/lib/adminAccess';
 import { isClerkConfigured } from '@/lib/clerk';
+import { clientIpKey, enforceRateLimit, rateLimitKey } from '@/lib/rateLimit';
 import { provisionTeacherRecord } from '@/lib/teacherStore';
 
 export const runtime = 'nodejs';
@@ -52,6 +53,13 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  const rateLimited = await enforceRateLimit({
+    key: rateLimitKey('admin-teacher-approve', clientIpKey(request)),
+    limit: 30,
+    windowSeconds: 60,
+  });
+  if (rateLimited) return rateLimited;
 
   const approved = typeof body.approved === 'boolean' ? body.approved : true;
   const approvedBy =

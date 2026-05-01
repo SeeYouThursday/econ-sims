@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server';
 import { TeacherAuthError, requireTeacherAuth } from '@/lib/clerk';
+import {
+  clientIpKey,
+  enforceRateLimit,
+  rateLimitKey,
+  getCheckRateLimitResult,
+  rateLimitHeaders,
+  rateLimitResponse,
+} from '@/lib/rateLimit';
 import { assertTeacherOwnsClassroom } from '@/lib/teacherStore';
 import {
   deleteStudentAlias,
@@ -356,6 +364,16 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CreateStudentBody;
     const teacherUserId = await requireTeacherAuth();
+    const rateLimited = await enforceRateLimit({
+      key: rateLimitKey(
+        'teacher-students-write',
+        teacherUserId || clientIpKey(request),
+        body.classroomCode,
+      ),
+      limit: 200,
+      windowSeconds: 60,
+    });
+    if (rateLimited) return rateLimited;
 
     if (teacherUserId) {
       const classroom = await assertTeacherOwnsClassroom(
@@ -434,6 +452,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (
+      error instanceof Error &&
+      error.message === 'Teacher does not own this classroom.'
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+
     return NextResponse.json(
       { error: 'Unexpected error while creating student account.' },
       { status: 500 },
@@ -445,6 +470,16 @@ export async function DELETE(request: Request) {
   try {
     const body = (await request.json()) as DeleteStudentBody;
     const teacherUserId = await requireTeacherAuth();
+    const rateLimited = await enforceRateLimit({
+      key: rateLimitKey(
+        'teacher-students-write',
+        teacherUserId || clientIpKey(request),
+        body.classroomCode,
+      ),
+      limit: 200,
+      windowSeconds: 60,
+    });
+    if (rateLimited) return rateLimited;
 
     if (teacherUserId) {
       const classroom = await assertTeacherOwnsClassroom(
@@ -526,6 +561,13 @@ export async function DELETE(request: Request) {
       );
     }
 
+    if (
+      error instanceof Error &&
+      error.message === 'Teacher does not own this classroom.'
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+
     if (error instanceof StockGameError) {
       return NextResponse.json(
         { error: error.message },
@@ -549,6 +591,21 @@ export async function GET(request: Request) {
       format: url.searchParams.get('format') ?? undefined,
     } as ListStudentsQuery;
     const teacherUserId = await requireTeacherAuth();
+
+    const rateLimitResult = await getCheckRateLimitResult({
+      key: rateLimitKey(
+        query.format === 'csv'
+          ? 'teacher-students-csv'
+          : 'teacher-students-read',
+        teacherUserId || clientIpKey(request),
+        query.classroomCode,
+      ),
+      limit: query.format === 'csv' ? 10 : 60,
+      windowSeconds: 60,
+    });
+    if (!rateLimitResult.allowed) {
+      return rateLimitResponse(rateLimitResult);
+    }
 
     if (teacherUserId) {
       const classroom = await assertTeacherOwnsClassroom(
@@ -626,6 +683,7 @@ export async function GET(request: Request) {
           'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="${filename}"`,
           'Cache-Control': 'no-store',
+          ...rateLimitHeaders(rateLimitResult),
         },
       });
     }
@@ -648,13 +706,22 @@ export async function GET(request: Request) {
       storage: rosterWithSecrets.storage,
     };
 
-    return NextResponse.json(roster);
+    return NextResponse.json(roster, {
+      headers: rateLimitHeaders(rateLimitResult),
+    });
   } catch (error) {
     if (error instanceof TeacherAuthError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status },
       );
+    }
+
+    if (
+      error instanceof Error &&
+      error.message === 'Teacher does not own this classroom.'
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
     }
 
     if (error instanceof StockGameError) {
@@ -675,6 +742,16 @@ export async function PATCH(request: Request) {
   try {
     const body = (await request.json()) as UpdateStudentBody;
     const teacherUserId = await requireTeacherAuth();
+    const rateLimited = await enforceRateLimit({
+      key: rateLimitKey(
+        'teacher-students-write',
+        teacherUserId || clientIpKey(request),
+        body.classroomCode,
+      ),
+      limit: 200,
+      windowSeconds: 60,
+    });
+    if (rateLimited) return rateLimited;
 
     if (teacherUserId) {
       const classroom = await assertTeacherOwnsClassroom(
@@ -746,6 +823,13 @@ export async function PATCH(request: Request) {
         { error: error.message },
         { status: error.status },
       );
+    }
+
+    if (
+      error instanceof Error &&
+      error.message === 'Teacher does not own this classroom.'
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
     }
 
     if (error instanceof StockGameError) {

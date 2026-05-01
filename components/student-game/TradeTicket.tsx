@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { fetchTickerNames, fetchTradeQuote } from './api';
 import type { StockQuote } from './types';
+import { RefreshCw } from 'lucide-react';
 import {
   buildTradeSubmission,
   calculateEstimatedOrderValue,
@@ -302,24 +303,29 @@ export default function TradeTicket({
           />
         </div>
         <div>
-          <div className="flex items-end justify-between gap-3">
-            <div>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+            <div className="min-w-0">
               <label className="text-xs font-semibold text-slate-600">
                 Latest price
               </label>
-              <div className="mt-1 rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900">
+              <div className="mt-1 truncate rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900">
                 {quote ? `$${quote.latestPrice.toFixed(2)}` : '—'}
               </div>
             </div>
             <button
               type="button"
+              title="Refresh latest price"
+              aria-label="Refresh latest price"
               onClick={() => {
                 void loadQuote(normalizedSymbol);
               }}
               disabled={tradingDisabled || loadingQuote}
-              className="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-300 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loadingQuote ? 'Loading…' : 'Refresh'}
+              <RefreshCw
+                size={16}
+                className={loadingQuote ? 'animate-spin' : undefined}
+              />
             </button>
           </div>
         </div>

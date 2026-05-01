@@ -1,18 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+let currentTeacherUserId = 'teacher_123';
+
 describe('teacher classroom routes', () => {
   beforeEach(async () => {
+    currentTeacherUserId = 'teacher_123';
     vi.resetModules();
     vi.unstubAllEnvs();
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_example');
     vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_example');
 
     vi.doMock('@clerk/nextjs/server', () => ({
-      auth: vi.fn(async () => ({ userId: 'teacher_123' })),
+      auth: vi.fn(async () => ({ userId: currentTeacherUserId })),
       clerkClient: vi.fn(async () => ({
         users: {
           getUser: vi.fn(async () => ({
-            id: 'teacher_123',
+            id: currentTeacherUserId,
             publicMetadata: {
               role: 'teacher',
               teacherApproved: true,
@@ -139,6 +142,7 @@ describe('teacher classroom routes', () => {
   it('lets a signed-in teacher create a student in an owned classroom without a shared passcode', async () => {
     const classroomsRoute = await import('../app/api/teacher/classrooms/route');
     const studentsRoute = await import('../app/api/stock-game/students/route');
+    const authRoute = await import('../app/api/stock-game/auth/route');
 
     const createClassroomRes = await classroomsRoute.POST(
       new Request('http://localhost/api/teacher/classrooms', {
@@ -187,6 +191,27 @@ describe('teacher classroom routes', () => {
     expect('studentPasscode' in (rosterPayload.students[0] ?? {})).toBe(false);
     expect(rosterPayload.piiIncluded).toBe(false);
 
+    const studentLoginRes = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: classroom.code,
+          username: 'student_a1',
+          studentPasscode: '=SUM(1,1)',
+        }),
+      }),
+    );
+
+    expect(studentLoginRes.status).toBe(200);
+    const studentLoginPayload = (await studentLoginRes.json()) as {
+      classroomCode: string;
+      username: string;
+      token: string;
+    };
+    expect(studentLoginPayload.classroomCode).toBe(classroom.code);
+    expect(studentLoginPayload.username).toBe('student_a1');
+    expect(studentLoginPayload.token).toBeTypeOf('string');
+
     const exportRes = await studentsRoute.GET(
       new Request(
         `http://localhost/api/stock-game/students?classroomCode=${classroom.code}&format=csv`,
@@ -221,10 +246,42 @@ describe('teacher classroom routes', () => {
 
     expect(auditPayload.classroomCode).toBe(classroom.code);
     expect(auditPayload.studentCount).toBe(1);
-    expect(auditPayload.activeSessionCount).toBe(0);
+    expect(auditPayload.activeSessionCount).toBe(1);
     expect(auditPayload.tradeCount).toBe(0);
     expect(auditPayload.topSymbols).toEqual([]);
     expect(auditPayload.piiIncluded).toBe(false);
+  });
+
+  it('rejects student creation when a different signed-in teacher uses another classroom code', async () => {
+    const classroomsRoute = await import('../app/api/teacher/classrooms/route');
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+
+    const createClassroomRes = await classroomsRoute.POST(
+      new Request('http://localhost/api/teacher/classrooms', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Original Teacher Class' }),
+      }),
+    );
+    expect(createClassroomRes.status).toBe(201);
+    const classroom = (await createClassroomRes.json()) as { code: string };
+
+    currentTeacherUserId = 'teacher_456';
+
+    const createStudentRes = await studentsRoute.POST(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: classroom.code,
+          username: 'student_cross_1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+
+    expect(createStudentRes.status).toBe(403);
+    await expect(createStudentRes.json()).resolves.toEqual({
+      error: 'Teacher does not own this classroom.',
+    });
   });
 
   it('treats repeated student deletes as successful for teacher workflows', async () => {

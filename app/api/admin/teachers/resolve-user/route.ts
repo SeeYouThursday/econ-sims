@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { AdminAccessError, requireTeacherAdminUser } from '@/lib/adminAccess';
 import { isClerkConfigured } from '@/lib/clerk';
+import { clientIpKey, enforceRateLimit, rateLimitKey } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -63,6 +64,12 @@ export async function POST(request: Request) {
   }
 
   const normalizedEmail = body.emailAddress.trim().toLowerCase();
+  const rateLimited = await enforceRateLimit({
+    key: rateLimitKey('admin-teacher-resolve-user', clientIpKey(request)),
+    limit: 30,
+    windowSeconds: 60,
+  });
+  if (rateLimited) return rateLimited;
 
   try {
     const client = await clerkClient();

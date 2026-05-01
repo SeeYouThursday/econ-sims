@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIpKey, enforceRateLimit, rateLimitKey } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -63,6 +64,13 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
+
+  const rateLimited = await enforceRateLimit({
+    key: rateLimitKey('stock-meta', clientIpKey(request)),
+    limit: 60,
+    windowSeconds: 60,
+  });
+  if (rateLimited) return rateLimited;
 
   const names = await Promise.all(
     symbols.map(async (symbol) => [
