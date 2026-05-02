@@ -58,11 +58,7 @@ export function clientIpKey(request: Request) {
     request.headers.get('x-real-ip')?.trim() ||
     'local';
 
-  // Fallback for development: if all local, use a more granular identifier
-  // to avoid sharing rate limits across all clients in dev
-  const finalIp =
-    ip === 'local' ? `local-dev-${Math.random().toString(36).slice(2, 8)}` : ip;
-  return rateLimitKey('ip', finalIp);
+  return rateLimitKey('ip', ip);
 }
 
 export async function checkRateLimit({
