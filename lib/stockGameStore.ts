@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'crypto';
+import { getNeonSql, isNeonConfigured } from './neon';
 import { getRedisClient, isRedisConfigured } from './redis';
 import { __resetStudentAliasStore } from './studentAliasStore';
 
@@ -104,6 +105,10 @@ type LeaderboardCacheEntry = {
   data: LeaderboardResponse;
 };
 
+type SaveStateOptions = {
+  requireDurableWrite?: boolean;
+};
+
 type CreateStudentInput = {
   classroomCode: string;
   teacherPasscode?: string;
@@ -205,24 +210,11 @@ const LEADERBOARD_TTL_MS = 60 * 1000;
 const TRADE_RETENTION_DAYS = Number(
   process.env.STOCK_GAME_TRADE_RETENTION_DAYS ?? '180',
 );
-const STATE_KEY = 'econ-sims:stock-game:state';
+const STATE_ROW_ID = 'primary';
+const LEGACY_REDIS_STATE_KEY = 'econ-sims:stock-game:state';
 const LEADERBOARD_KEY_PREFIX = 'econ-sims:stock-game:leaderboard';
 
-let hasLoggedRedisFallback = false;
-
-function logRedisFallback(message: string, error?: unknown) {
-  if (hasLoggedRedisFallback) {
-    return;
-  }
-
-  hasLoggedRedisFallback = true;
-  if (error) {
-    console.error(message, error);
-    return;
-  }
-
-  console.error(message);
-}
+let hasLoggedNeonFallback = false;
 
 function createEmptyState(): PersistedState {
   return {
@@ -362,12 +354,27 @@ function purgeExpiredData(state: PersistedState) {
   return changed;
 }
 
+function logNeonFallback(message: string, error?: unknown) {
+  if (hasLoggedNeonFallback) {
+    return;
+  }
+
+  hasLoggedNeonFallback = true;
+  if (error) {
+    console.error(message, error);
+    return;
+  }
+
+  console.error(message);
+}
+
 function stripLegacyStudentPasscodes(state: PersistedState) {
   let changed = false;
 
   for (const student of Object.values(state.students)) {
     if ('studentPasscode' in student) {
-      delete (student as Student & { studentPasscode?: string }).studentPasscode;
+      delete (student as Student & { studentPasscode?: string })
+        .studentPasscode;
       changed = true;
     }
   }
@@ -375,8 +382,61 @@ function stripLegacyStudentPasscodes(state: PersistedState) {
   return changed;
 }
 
-async function loadState() {
+function parsePersistedState(value: unknown): PersistedState | null {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as PersistedState;
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as PersistedState;
+  }
+
+  return null;
+}
+
+function stockGameStorageLabel() {
+  return isNeonConfigured() ? 'neon' : 'memory';
+}
+
+async function ensureStockGameStateTable() {
+  if (!isNeonConfigured()) {
+    return;
+  }
+
+  const sql = getNeonSql();
+  await sql`
+    CREATE TABLE IF NOT EXISTS stock_game_state (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+}
+
+async function loadLegacyRedisState() {
   if (!isRedisConfigured()) {
+    return null;
+  }
+
+  try {
+    const redis = await getRedisClient();
+    const raw = await redis?.get(LEGACY_REDIS_STATE_KEY);
+    return parsePersistedState(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function loadState() {
+  if (!isNeonConfigured()) {
     if (!globalThis.__stockGameState) {
       globalThis.__stockGameState = createEmptyState();
       ensureSeedClassroom(globalThis.__stockGameState);
@@ -387,50 +447,47 @@ async function loadState() {
     return globalThis.__stockGameState;
   }
 
-  let redis = null;
   try {
-    redis = await getRedisClient();
-  } catch (error) {
-    logRedisFallback('Redis unavailable while loading stock game state', error);
-  }
-
-  if (!redis) {
-    if (!globalThis.__stockGameState) {
-      globalThis.__stockGameState = createEmptyState();
-      ensureSeedClassroom(globalThis.__stockGameState);
-    }
-    stripLegacyStudentPasscodes(globalThis.__stockGameState);
-    return globalThis.__stockGameState;
-  }
-
-  try {
-    const raw = await redis.get(STATE_KEY);
+    await ensureStockGameStateTable();
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT data
+      FROM stock_game_state
+      WHERE id = ${STATE_ROW_ID}
+      LIMIT 1
+    `;
     const fallbackState = globalThis.__stockGameState;
-    const state = raw
-      ? (JSON.parse(raw) as PersistedState)
-      : (fallbackState ?? createEmptyState());
+    const row = Array.isArray(rows)
+      ? (rows[0] as { data?: unknown } | undefined)
+      : undefined;
+    const legacyRedisState = !row?.data ? await loadLegacyRedisState() : null;
+    const state =
+      parsePersistedState(row?.data) ??
+      legacyRedisState ??
+      fallbackState ??
+      createEmptyState();
     const beforeSeedCount = Object.keys(state.classrooms).length;
     ensureSeedClassroom(state);
     const purged = purgeExpiredData(state);
     const scrubbedLegacyPasscodes = stripLegacyStudentPasscodes(state);
 
     // Keep process-local fallback in sync so request paths in the same dev
-    // process can continue when Redis writes are intermittently failing.
+    // process can continue when reads are intermittently failing.
     globalThis.__stockGameState = state;
 
     if (
-      !raw ||
+      !row?.data ||
       Object.keys(state.classrooms).length !== beforeSeedCount ||
       purged ||
       scrubbedLegacyPasscodes
     ) {
-      await redis.set(STATE_KEY, JSON.stringify(state));
+      await saveState(state, { requireDurableWrite: true });
     }
 
     return state;
   } catch (error) {
-    logRedisFallback(
-      'Redis read failed, using in-memory stock game state',
+    logNeonFallback(
+      'Neon read failed, using in-memory stock game state',
       error,
     );
     if (!globalThis.__stockGameState) {
@@ -442,29 +499,36 @@ async function loadState() {
   }
 }
 
-async function saveState(state: PersistedState) {
-  if (!isRedisConfigured()) {
-    globalThis.__stockGameState = state;
-    return;
-  }
-
-  let redis = null;
-  try {
-    redis = await getRedisClient();
-  } catch (error) {
-    logRedisFallback('Redis unavailable while saving stock game state', error);
-  }
-
-  if (!redis) {
+async function saveState(
+  state: PersistedState,
+  options: SaveStateOptions = {},
+) {
+  if (!isNeonConfigured()) {
     globalThis.__stockGameState = state;
     return;
   }
 
   try {
-    await redis.set(STATE_KEY, JSON.stringify(state));
-  } catch (error) {
-    logRedisFallback('Redis write failed, state stored in-memory only', error);
+    await ensureStockGameStateTable();
+    const sql = getNeonSql();
+    await sql`
+      INSERT INTO stock_game_state (id, data, updated_at)
+      VALUES (${STATE_ROW_ID}, ${JSON.stringify(state)}::jsonb, NOW())
+      ON CONFLICT (id)
+      DO UPDATE SET
+        data = EXCLUDED.data,
+        updated_at = NOW()
+    `;
     globalThis.__stockGameState = state;
+  } catch (error) {
+    logNeonFallback('Neon write failed, state stored in-memory only', error);
+    globalThis.__stockGameState = state;
+    if (options.requireDurableWrite) {
+      throw new StockGameError(
+        'Persistent stock game storage is unavailable. Please try again shortly.',
+        503,
+      );
+    }
   }
 }
 
@@ -669,7 +733,7 @@ export async function ensureTeacherClassroom({
       startingCash: startingCash ?? getClassStartingCash(existing),
       durationDays: durationDays ?? getClassDurationDays(existing),
     };
-    await saveState(state);
+    await saveState(state, { requireDurableWrite: true });
     return state.classrooms[normalizedCode];
   }
 
@@ -681,7 +745,7 @@ export async function ensureTeacherClassroom({
     durationDays: durationDays ?? DEFAULT_CLASSROOM_DURATION_DAYS,
     createdAt: nowIso(),
   };
-  await saveState(state);
+  await saveState(state, { requireDurableWrite: true });
   return state.classrooms[normalizedCode];
 }
 
@@ -788,7 +852,7 @@ export async function createStudent(input: CreateStudentInput) {
 
   state.students[id] = student;
   state.studentsByClassAndName[key] = id;
-  await saveState(state);
+  await saveState(state, { requireDurableWrite: true });
 
   return {
     studentId: id,
@@ -797,7 +861,7 @@ export async function createStudent(input: CreateStudentInput) {
     studentPasscode,
     startingCash: classStartingCash,
     createdAt: student.createdAt,
-    storage: isRedisConfigured() ? 'redis' : 'memory',
+    storage: stockGameStorageLabel(),
   };
 }
 
@@ -881,13 +945,13 @@ export async function createStudentsBatch(input: CreateStudentsBatchInput) {
     };
   });
 
-  await saveState(state);
+  await saveState(state, { requireDurableWrite: true });
 
   return {
     classroomCode,
     createdCount: createdStudents.length,
     students: createdStudents,
-    storage: isRedisConfigured() ? 'redis' : 'memory',
+    storage: stockGameStorageLabel(),
   };
 }
 
@@ -929,7 +993,7 @@ export async function loginStudent(input: LoginInput) {
     classroomCode,
     expiresAt: Date.now() + SESSION_TTL_MS,
   };
-  await saveState(state);
+  await saveState(state, { requireDurableWrite: true });
 
   return {
     token,
@@ -937,7 +1001,38 @@ export async function loginStudent(input: LoginInput) {
     studentId,
     classroomCode,
     username: student.username,
-    storage: isRedisConfigured() ? 'redis' : 'memory',
+    storage: stockGameStorageLabel(),
+  };
+}
+
+export async function assertCanAttemptStudentTrade(tokenInput: string) {
+  const state = await loadState();
+  const token = tokenInput.trim();
+  if (!token) {
+    throw new StockGameError('Session token is required.', 401);
+  }
+
+  const session = getActiveSession(state, token);
+  const student = state.students[session.studentId];
+  if (!student) {
+    throw new StockGameError('Student account was not found.', 404);
+  }
+
+  const classroom = state.classrooms[session.classroomCode];
+  if (!classroom) {
+    throw new StockGameError('Classroom was not found.', 404);
+  }
+
+  assertClassroomIsActive(classroom);
+
+  if (!isStudentActive(student)) {
+    throw new StockGameError('Student account is inactive.', 403);
+  }
+
+  return {
+    classroomCode: session.classroomCode,
+    studentId: student.id,
+    username: student.username,
   };
 }
 
@@ -1023,7 +1118,7 @@ export async function placeTrade(input: PlaceTradeInput) {
     executedAt,
   });
 
-  await saveState(state);
+  await saveState(state, { requireDurableWrite: true });
   await clearCachedLeaderboard(session.classroomCode);
 
   return {
@@ -1031,7 +1126,7 @@ export async function placeTrade(input: PlaceTradeInput) {
     latestPrice: Number(input.price.toFixed(2)),
     quoteAsOf,
     executedAt,
-    storage: isRedisConfigured() ? 'redis' : 'memory',
+    storage: stockGameStorageLabel(),
   };
 }
 
@@ -1158,14 +1253,14 @@ export async function deleteStudent(input: DeleteStudentInput) {
 
   state.trades = state.trades.filter((trade) => trade.studentId !== studentId);
 
-  await saveState(state);
+  await saveState(state, { requireDurableWrite: true });
   await clearCachedLeaderboard(classroomCode);
 
   return {
     classroomCode,
     username,
     deleted: true,
-    storage: isRedisConfigured() ? 'redis' : 'memory',
+    storage: stockGameStorageLabel(),
   };
 }
 
@@ -1217,7 +1312,7 @@ export async function getTeacherAudit(input: TeacherAuditInput) {
     buyCount,
     sellCount,
     topSymbols,
-    storage: isRedisConfigured() ? 'redis' : 'memory',
+    storage: stockGameStorageLabel(),
     piiIncluded: false,
   };
 }
@@ -1260,7 +1355,7 @@ export async function listStudentsForClassroom(input: ListStudentsInput) {
     studentCount: students.length,
     students,
     piiIncluded: true,
-    storage: isRedisConfigured() ? 'redis' : 'memory',
+    storage: stockGameStorageLabel(),
   };
 }
 
@@ -1315,7 +1410,7 @@ export async function manageStudent(input: ManageStudentInput) {
     student.isActive = true;
   }
 
-  await saveState(state);
+  await saveState(state, { requireDurableWrite: true });
   await clearCachedLeaderboard(classroomCode);
 
   return {
@@ -1323,7 +1418,7 @@ export async function manageStudent(input: ManageStudentInput) {
     username,
     action: input.action,
     isActive: isStudentActive(student),
-    storage: isRedisConfigured() ? 'redis' : 'memory',
+    storage: stockGameStorageLabel(),
   };
 }
 
@@ -1377,7 +1472,7 @@ export async function manageClassroomStudents(
     delete state.marketPricesByClass[classroomCode];
   }
 
-  await saveState(state);
+  await saveState(state, { requireDurableWrite: true });
   await clearCachedLeaderboard(classroomCode);
 
   return {
@@ -1387,39 +1482,28 @@ export async function manageClassroomStudents(
     startingCash: classStartingCash,
     restartedAt:
       input.action === 'restart-game' ? classroom.createdAt : undefined,
-    storage: isRedisConfigured() ? 'redis' : 'memory',
+    storage: stockGameStorageLabel(),
   };
 }
 
 export async function __resetStockGameState() {
   delete globalThis.__stockGameState;
   getMemoryLeaderboardCache().clear();
-  hasLoggedRedisFallback = false;
+  hasLoggedNeonFallback = false;
   __resetStudentAliasStore();
 
-  if (!isRedisConfigured()) {
+  if (!isNeonConfigured()) {
     return;
   }
 
-  let redis = null;
   try {
-    redis = await getRedisClient();
+    await ensureStockGameStateTable();
+    const sql = getNeonSql();
+    await sql`
+      DELETE FROM stock_game_state
+      WHERE id = ${STATE_ROW_ID}
+    `;
   } catch {
-    redis = null;
-  }
-
-  if (!redis) {
-    return;
-  }
-
-  const seedCode = normalizeClassroomCode(
-    process.env.STOCK_GAME_CLASSROOM_CODE ?? 'DEMO101',
-  );
-
-  try {
-    await redis.del(STATE_KEY);
-    await redis.del(leaderboardCacheKey(seedCode));
-  } catch {
-    // Ignore reset cache failures in tests/dev.
+    // Ignore reset failures in tests/dev.
   }
 }

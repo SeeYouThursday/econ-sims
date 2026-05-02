@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { clientIpKey, enforceRateLimit, rateLimitKey } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -173,7 +174,14 @@ async function fetchLivePayload(): Promise<FedStartPayload> {
   };
 }
 
-export async function GET() {
+export async function GET(request?: Request) {
+  const rateLimited = await enforceRateLimit({
+    key: rateLimitKey('fed-start', request ? clientIpKey(request) : 'server'),
+    limit: 120,
+    windowSeconds: 60,
+  });
+  if (rateLimited) return rateLimited;
+
   const cacheState = getCacheState();
   const now = Date.now();
   const cached = cacheState.entry;

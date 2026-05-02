@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIpKey, enforceRateLimit, rateLimitKey } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -45,6 +46,20 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
+
+  const rateLimited = await enforceRateLimit({
+    key: rateLimitKey('stock-history', clientIpKey(request), symbol),
+    limit: 120,
+    windowSeconds: 60,
+  });
+  if (rateLimited) return rateLimited;
+
+  const ipRateLimited = await enforceRateLimit({
+    key: rateLimitKey('stock-history-ip', clientIpKey(request)),
+    limit: 240,
+    windowSeconds: 60,
+  });
+  if (ipRateLimited) return ipRateLimited;
 
   const to = new Date();
   const from = new Date(to);

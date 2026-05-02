@@ -78,7 +78,9 @@ function isTradeResult(value: unknown): value is TradeResult {
     typeof candidate.latestPrice === 'number' &&
     typeof candidate.quoteAsOf === 'string' &&
     typeof candidate.executedAt === 'string' &&
-    (candidate.storage === 'redis' || candidate.storage === 'memory') &&
+    (candidate.storage === 'neon' ||
+      candidate.storage === 'redis' ||
+      candidate.storage === 'memory') &&
     isPortfolioSnapshot(candidate.portfolio)
   );
 }

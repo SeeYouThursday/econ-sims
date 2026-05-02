@@ -39,7 +39,7 @@ export type TradeResult = {
   latestPrice: number;
   quoteAsOf: string;
   executedAt: string;
-  storage: 'redis' | 'memory';
+  storage: 'neon' | 'redis' | 'memory';
 };
 
 export type StudentTradeHistoryEntry = {

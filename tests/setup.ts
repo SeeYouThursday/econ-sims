@@ -30,3 +30,4 @@ process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = '';
 delete (globalThis as Record<string, unknown>).__econSimsUpstashRedis;
 delete (globalThis as Record<string, unknown>).__econSimsRedisClient;
 delete (globalThis as Record<string, unknown>).__econSimsRedisConnectPromise;
+delete (globalThis as Record<string, unknown>).__econSimsRateLimitMemoryCounters;

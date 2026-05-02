@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { AdminAccessError, requireTeacherAdminUser } from '@/lib/adminAccess';
 import { isClerkConfigured } from '@/lib/clerk';
+import { clientIpKey, enforceRateLimit, rateLimitKey } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -61,6 +62,12 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const query = url.searchParams.get('query') ?? undefined;
+  const rateLimited = await enforceRateLimit({
+    key: rateLimitKey('admin-teacher-waitlist-read', clientIpKey(request)),
+    limit: 60,
+    windowSeconds: 60,
+  });
+  if (rateLimited) return rateLimited;
 
   try {
     const client = await clerkClient();
@@ -126,6 +133,13 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  const rateLimited = await enforceRateLimit({
+    key: rateLimitKey('admin-teacher-waitlist-write', clientIpKey(request)),
+    limit: 30,
+    windowSeconds: 60,
+  });
+  if (rateLimited) return rateLimited;
 
   const action = body.action === 'reject' ? 'reject' : 'invite';
 

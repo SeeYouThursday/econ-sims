@@ -32,6 +32,8 @@ describe('/api/stock-game routes', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.stubEnv('POLYGON_API_KEY', 'test-key');
+    delete (globalThis as Record<string, unknown>)
+      .__econSimsRateLimitMemoryCounters;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.toString();
       if (!url.includes('api.polygon.io')) {
@@ -783,6 +785,77 @@ describe('/api/stock-game routes', () => {
     expect(tradeRes.status).toBe(403);
     const tradePayload = (await tradeRes.json()) as { error: string };
     expect(tradePayload.error).toContain('classroom game has ended');
+  });
+
+  it('rejects invalid trade tokens before requesting market quotes', async () => {
+    const tradesRoute = await import('../app/api/stock-game/trades/route');
+
+    for (let index = 0; index < 120; index += 1) {
+      const response = await tradesRoute.POST(
+        new Request('http://localhost/api/stock-game/trades', {
+          method: 'POST',
+          headers: { 'x-forwarded-for': '203.0.113.10' },
+          body: JSON.stringify({
+            token: `invalid-token-${index}`,
+            symbol: 'AAPL',
+            side: 'buy',
+            shares: 1,
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(401);
+    }
+
+    const blocked = await tradesRoute.POST(
+      new Request('http://localhost/api/stock-game/trades', {
+        method: 'POST',
+        headers: { 'x-forwarded-for': '203.0.113.10' },
+        body: JSON.stringify({
+          token: 'invalid-token-120',
+          symbol: 'AAPL',
+          side: 'buy',
+          shares: 1,
+        }),
+      }),
+    );
+
+    expect(blocked.status).toBe(429);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(0);
+  });
+
+  it('rate limits student sign-in attempts across varied usernames', async () => {
+    const authRoute = await import('../app/api/stock-game/auth/route');
+
+    for (let index = 0; index < 120; index += 1) {
+      const response = await authRoute.POST(
+        new Request('http://localhost/api/stock-game/auth', {
+          method: 'POST',
+          headers: { 'x-forwarded-for': '203.0.113.11' },
+          body: JSON.stringify({
+            classroomCode: CLASSROOM,
+            username: `student_missing_${index}`,
+            studentPasscode: 'pass1234',
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(404);
+    }
+
+    const blocked = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        headers: { 'x-forwarded-for': '203.0.113.11' },
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_missing_120',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+
+    expect(blocked.status).toBe(429);
   });
 
   it('restarts a classroom game with the same student credentials', async () => {
