@@ -13,7 +13,8 @@
 # testing
 /coverage
 /scripts
-
+/test-results
+inspect.mjs
 # next.js
 /.next/
 /out/

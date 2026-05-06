@@ -24,6 +24,7 @@ type TeacherStoreState = {
 
 declare global {
   var __econSimsTeacherStore: TeacherStoreState | undefined;
+  var __econSimsTeacherTablesEnsured: boolean | undefined;
 }
 
 function nowIso() {
@@ -114,6 +115,11 @@ async function ensureTeacherTables() {
     return;
   }
 
+  // Avoid redundant DDL executions by caching the "ensured" state in globalThis
+  if (globalThis.__econSimsTeacherTablesEnsured) {
+    return;
+  }
+
   const sql = getNeonSql();
   await sql`
     CREATE TABLE IF NOT EXISTS stock_game_teachers (
@@ -143,6 +149,8 @@ async function ensureTeacherTables() {
     ALTER TABLE stock_game_classrooms
     ADD COLUMN IF NOT EXISTS duration_days INTEGER NOT NULL DEFAULT 30
   `;
+
+  globalThis.__econSimsTeacherTablesEnsured = true;
 }
 
 export async function requireTeacherRecord(

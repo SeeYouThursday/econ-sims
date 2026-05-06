@@ -47,7 +47,7 @@ function normalizeClassroomCode(value: string) {
 }
 
 function normalizeUsername(value: string) {
-  return value.trim().toLowerCase();
+  return value.trim().toUpperCase();
 }
 
 function makeKey(classroomCode: string, username: string) {
@@ -207,7 +207,8 @@ export async function upsertStudentAliasesBulk(
         id: existing?.id ?? entry.id,
         classroomCode: entry.classroomCode,
         username: entry.username,
-        studentPasscode: entry.studentPasscode ?? existing?.studentPasscode ?? null,
+        studentPasscode:
+          entry.studentPasscode ?? existing?.studentPasscode ?? null,
         isActive: entry.isActive,
         createdAt: existing?.createdAt ?? nowIso(),
       };

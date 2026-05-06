@@ -84,7 +84,7 @@ const Page = () => {
             <div className="relative">
               <div className="relative rounded-3xl border border-slate-100 bg-slate-50/50 p-2 shadow-2xl">
                 <Image
-                  src="/hero-dashboard.png" // The master scene I generated
+                  src="/student-dash.png" // The master scene I generated
                   alt="Civics Lab Student Simulation Dashboard"
                   width={800}
                   height={450}
