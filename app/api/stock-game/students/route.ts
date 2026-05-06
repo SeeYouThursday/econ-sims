@@ -151,7 +151,7 @@ function buildRosterResponse({
 
   const students = aliases
     .map((alias) =>
-      buildRosterStudent(alias, stockByUsername.get(alias.username)),
+      buildRosterStudent(alias, stockByUsername.get(alias.username.toUpperCase())),
     )
     .sort((a, b) => a.username.localeCompare(b.username));
 
