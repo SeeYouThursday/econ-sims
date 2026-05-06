@@ -96,10 +96,11 @@ export default function StudentSignInPanel({
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-sm font-semibold text-slate-700">
+          <label htmlFor="student-sign-in-classroom-code" className="block text-sm font-semibold text-slate-700">
             Class code
           </label>
           <input
+            id="student-sign-in-classroom-code"
             value={classroomCode}
             onChange={(event) => setClassroomCode(event.target.value)}
             placeholder="ABC123"
@@ -108,10 +109,11 @@ export default function StudentSignInPanel({
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-slate-700">
+          <label htmlFor="student-sign-in-username" className="block text-sm font-semibold text-slate-700">
             Student alias
           </label>
           <input
+            id="student-sign-in-username"
             value={username}
             onChange={(event) => setUsername(event.target.value)}
             placeholder="student_01"
@@ -121,10 +123,11 @@ export default function StudentSignInPanel({
       </div>
 
       <div className="mt-4">
-        <label className="block text-sm font-semibold text-slate-700">
+        <label htmlFor="student-sign-in-passcode" className="block text-sm font-semibold text-slate-700">
           Student passcode
         </label>
         <input
+          id="student-sign-in-passcode"
           type="password"
           value={studentPasscode}
           onChange={(event) => setStudentPasscode(event.target.value)}

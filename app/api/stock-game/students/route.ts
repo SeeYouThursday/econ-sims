@@ -143,7 +143,10 @@ function buildRosterResponse({
   } | null;
 }) {
   const stockByUsername = new Map(
-    (stockRoster?.students ?? []).map((student) => [student.username, student]),
+    (stockRoster?.students ?? []).map((student) => [
+      student.username.toUpperCase(),
+      student,
+    ]),
   );
 
   const students = aliases

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'crypto';
 import { getNeonSql, isNeonConfigured } from './neon';
 import { getRedisClient, isRedisConfigured } from './redis';
 import { __resetStudentAliasStore } from './studentAliasStore';
+import { decryptRecoverablePasscode } from './passcodeCipher';
 
 type TradeSide = 'buy' | 'sell';
 
@@ -402,6 +403,149 @@ function parsePersistedState(value: unknown): PersistedState | null {
   return null;
 }
 
+function ensureStockGameStateShape(state: PersistedState) {
+  let changed = false;
+
+  if (!state.classrooms) {
+    state.classrooms = {};
+    changed = true;
+  }
+
+  if (!state.students) {
+    state.students = {};
+    changed = true;
+  }
+
+  if (!state.studentsByClassAndName) {
+    state.studentsByClassAndName = {};
+    changed = true;
+  }
+
+  if (!state.sessions) {
+    state.sessions = {};
+    changed = true;
+  }
+
+  if (!state.trades) {
+    state.trades = [];
+    changed = true;
+  }
+
+  if (!state.marketPricesByClass) {
+    state.marketPricesByClass = {};
+    changed = true;
+  }
+
+  const rebuiltIndex: Record<string, string> = {};
+  for (const student of Object.values(state.students)) {
+    if (!student?.id || !student?.username || !student?.classroomCode) {
+      continue;
+    }
+    rebuiltIndex[makeClassAndUserKey(student.classroomCode, student.username)] =
+      student.id;
+  }
+
+  const currentKeys = Object.keys(state.studentsByClassAndName);
+  const rebuiltKeys = Object.keys(rebuiltIndex);
+  if (
+    rebuiltKeys.length !== currentKeys.length ||
+    rebuiltKeys.some(
+      (key) => state.studentsByClassAndName[key] !== rebuiltIndex[key],
+    )
+  ) {
+    state.studentsByClassAndName = rebuiltIndex;
+    changed = true;
+  }
+
+  return changed;
+}
+
+async function recoverMissingStudentsFromAliasStore(
+  state: PersistedState,
+): Promise<boolean> {
+  if (!isNeonConfigured()) {
+    return false;
+  }
+
+  try {
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT classroom_code, username, student_passcode_encrypted, is_active, created_at
+      FROM stock_game_student_aliases
+    `;
+    const aliasRows = Array.isArray(rows)
+      ? (rows as Array<Partial<Record<string, unknown>>>)
+      : [];
+
+    let recovered = false;
+
+    for (const row of aliasRows) {
+      if (!row || typeof row !== 'object') {
+        continue;
+      }
+
+      const classroomCode =
+        typeof row.classroom_code === 'string'
+          ? normalizeClassroomCode(row.classroom_code)
+          : '';
+      const username =
+        typeof row.username === 'string' ? normalizeUsername(row.username) : '';
+      const encryptedPasscode =
+        typeof row.student_passcode_encrypted === 'string'
+          ? row.student_passcode_encrypted
+          : null;
+      const isActive = Boolean(row.is_active);
+      const createdAt = new Date(
+        String(row.created_at ?? nowIso()),
+      ).toISOString();
+
+      if (!classroomCode || !username || !encryptedPasscode) {
+        continue;
+      }
+
+      const classroom = state.classrooms[classroomCode];
+      if (!classroom) {
+        continue;
+      }
+
+      const passcode = decryptRecoverablePasscode(encryptedPasscode);
+      if (!passcode) {
+        continue;
+      }
+
+      const key = makeClassAndUserKey(classroomCode, username);
+      const studentId = state.studentsByClassAndName[key];
+      const existingStudent = studentId ? state.students[studentId] : null;
+
+      if (existingStudent) {
+        if (!existingStudent.passcodeHash) {
+          existingStudent.passcodeHash = hashSecret(passcode);
+          recovered = true;
+        }
+        continue;
+      }
+
+      const newStudentId = randomUUID();
+      state.students[newStudentId] = {
+        id: newStudentId,
+        classroomCode,
+        username,
+        passcodeHash: hashSecret(passcode),
+        isActive,
+        cash: getClassStartingCash(classroom),
+        positions: {},
+        createdAt,
+      };
+      state.studentsByClassAndName[key] = newStudentId;
+      recovered = true;
+    }
+
+    return recovered;
+  } catch {
+    return false;
+  }
+}
+
 function stockGameStorageLabel() {
   return isNeonConfigured() ? 'neon' : 'memory';
 }
@@ -442,6 +586,7 @@ async function loadState() {
       ensureSeedClassroom(globalThis.__stockGameState);
     }
 
+    ensureStockGameStateShape(globalThis.__stockGameState);
     stripLegacyStudentPasscodes(globalThis.__stockGameState);
 
     return globalThis.__stockGameState;
@@ -467,6 +612,9 @@ async function loadState() {
       fallbackState ??
       createEmptyState();
     const beforeSeedCount = Object.keys(state.classrooms).length;
+    const shapeUpdated = ensureStockGameStateShape(state);
+    const recoveredFromAliases =
+      await recoverMissingStudentsFromAliasStore(state);
     ensureSeedClassroom(state);
     const purged = purgeExpiredData(state);
     const scrubbedLegacyPasscodes = stripLegacyStudentPasscodes(state);
@@ -479,7 +627,9 @@ async function loadState() {
       !row?.data ||
       Object.keys(state.classrooms).length !== beforeSeedCount ||
       purged ||
-      scrubbedLegacyPasscodes
+      scrubbedLegacyPasscodes ||
+      shapeUpdated ||
+      recoveredFromAliases
     ) {
       await saveState(state, { requireDurableWrite: true });
     }
@@ -842,7 +992,7 @@ export async function createStudent(input: CreateStudentInput) {
   const student: Student = {
     id,
     classroomCode,
-    username,
+    username: normalizeUsername(username),
     passcodeHash: hashSecret(studentPasscode),
     isActive: true,
     cash: classStartingCash,
@@ -922,7 +1072,7 @@ export async function createStudentsBatch(input: CreateStudentsBatchInput) {
     const student: Student = {
       id: studentId,
       classroomCode,
-      username: entry.username,
+      username: normalizeUsername(entry.username),
       passcodeHash: hashSecret(entry.studentPasscode),
       isActive: true,
       cash: classStartingCash,
@@ -938,7 +1088,7 @@ export async function createStudentsBatch(input: CreateStudentsBatchInput) {
     return {
       studentId,
       classroomCode,
-      username: entry.username,
+      username: normalizeUsername(entry.username),
       studentPasscode: entry.studentPasscode,
       startingCash: classStartingCash,
       createdAt,

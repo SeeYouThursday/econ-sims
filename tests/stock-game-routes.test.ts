@@ -137,6 +137,42 @@ describe('/api/stock-game routes', () => {
     expect(portfolioPayload.totalValue).toBe(10000);
   });
 
+  it('recovers student login when the alias lookup index is missing', async () => {
+    const studentsRoute = await import('../app/api/stock-game/students/route');
+    const authRoute = await import('../app/api/stock-game/auth/route');
+
+    const createRes = await studentsRoute.POST(
+      new Request('http://localhost/api/stock-game/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          teacherPasscode: TEACHER_PASSCODE,
+          username: 'student_a1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+
+    expect(createRes.status).toBe(201);
+    delete (globalThis as Record<string, unknown>).__stockGameState
+      ?.studentsByClassAndName;
+
+    const authRes = await authRoute.POST(
+      new Request('http://localhost/api/stock-game/auth', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomCode: CLASSROOM,
+          username: 'student_a1',
+          studentPasscode: 'pass1234',
+        }),
+      }),
+    );
+
+    expect(authRes.status).toBe(200);
+    const authPayload = (await authRes.json()) as { token: string };
+    expect(authPayload.token).toBeTypeOf('string');
+  });
+
   it('returns leaderboard ranked by total value', async () => {
     const studentsRoute = await import('../app/api/stock-game/students/route');
     const authRoute = await import('../app/api/stock-game/auth/route');
