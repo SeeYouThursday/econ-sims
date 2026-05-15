@@ -154,8 +154,14 @@ describe('/api/stock-game routes', () => {
     );
 
     expect(createRes.status).toBe(201);
-    delete (globalThis as Record<string, unknown>).__stockGameState
-      ?.studentsByClassAndName;
+    const memoryState = (
+      globalThis as unknown as {
+        __stockGameState?: { studentsByClassAndName?: Record<string, string> };
+      }
+    ).__stockGameState;
+    if (memoryState) {
+      delete memoryState.studentsByClassAndName;
+    }
 
     const authRes = await authRoute.POST(
       new Request('http://localhost/api/stock-game/auth', {

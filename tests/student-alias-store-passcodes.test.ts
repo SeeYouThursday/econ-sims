@@ -128,13 +128,18 @@ describe('student alias store passcode persistence', () => {
     expect(insertCall).toBeDefined();
     const insertValues = insertCall?.slice(1) ?? [];
 
+    // upsertStudentAlias normalizes username to upper-case, matching the
+    // uppercased keys used by the roster Map (see commit cbea62c).
     expect(insertValues).toContain('ABC123');
-    expect(insertValues).toContain('student_03');
+    expect(insertValues).toContain('STUDENT_03');
     expect(insertValues).toContain(true);
     expect(insertValues).not.toContain('HIDE9999');
 
     const encryptedValue = insertValues.find(
-      (value) => typeof value === 'string' && value !== 'ABC123' && value !== 'student_03',
+      (value) =>
+        typeof value === 'string' &&
+        value !== 'ABC123' &&
+        value !== 'STUDENT_03',
     );
     expect(encryptedValue).toBeTypeOf('string');
     expect(encryptedValue).not.toBe('HIDE9999');
