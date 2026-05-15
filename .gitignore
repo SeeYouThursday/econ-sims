@@ -47,6 +47,7 @@ next-env.d.ts
 .agent/
 *.agent
 *.agent.json
+/.claude
 
 # Editor / OS
 .vscode/

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'crypto';
+import { createNormalizedNeonMock } from './_helpers/normalized-neon-mock';
 
 const CLASSROOM = process.env.STOCK_GAME_CLASSROOM_CODE ?? 'DEMO101';
 const TEACHER_PASSCODE =
@@ -56,27 +57,7 @@ describe('stock game Neon failure handling', () => {
   it('uses Neon for durable student creation and login even when Redis is unavailable', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://example.test/db');
 
-    let persistedState: unknown = null;
-    const sql = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
-      const statement = strings.join('?');
-
-      if (statement.includes('SELECT data')) {
-        return persistedState ? [{ data: persistedState }] : [];
-      }
-
-      if (statement.includes('INSERT INTO stock_game_state')) {
-        persistedState =
-          typeof values[1] === 'string' ? JSON.parse(values[1]) : values[1];
-        return [];
-      }
-
-      if (statement.includes('DELETE FROM stock_game_state')) {
-        persistedState = null;
-        return [];
-      }
-
-      return [];
-    });
+    const { sql } = createNormalizedNeonMock();
 
     vi.doMock('@/lib/neon', () => ({
       isNeonConfigured: () => true,
@@ -114,30 +95,8 @@ describe('stock game Neon failure handling', () => {
     expect(session.token).toBeTypeOf('string');
   });
 
-  it('bootstraps existing legacy Redis stock-game state into Neon when Neon is empty', async () => {
+  it('bootstraps existing legacy Redis stock-game state into normalized tables when Neon is empty', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://example.test/db');
-
-    let persistedState: unknown = null;
-    const sql = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
-      const statement = strings.join('?');
-
-      if (statement.includes('SELECT data')) {
-        return persistedState ? [{ data: persistedState }] : [];
-      }
-
-      if (statement.includes('INSERT INTO stock_game_state')) {
-        persistedState =
-          typeof values[1] === 'string' ? JSON.parse(values[1]) : values[1];
-        return [];
-      }
-
-      if (statement.includes('DELETE FROM stock_game_state')) {
-        persistedState = null;
-        return [];
-      }
-
-      return [];
-    });
 
     const legacyState = {
       classrooms: {
@@ -169,6 +128,8 @@ describe('stock game Neon failure handling', () => {
       marketPricesByClass: {},
     };
 
+    const { sql, store: neonStore } = createNormalizedNeonMock();
+
     vi.doMock('@/lib/neon', () => ({
       isNeonConfigured: () => true,
       getNeonSql: vi.fn(() => sql),
@@ -190,11 +151,15 @@ describe('stock game Neon failure handling', () => {
     const store = await import('../lib/stockGameStore');
     const leaderboard = await store.getLeaderboard(CLASSROOM);
 
+    // The legacy student appears via the Redis-bootstrapped, normalized data.
     expect(leaderboard.entries[0]?.username).toBe('legacy_01');
-    expect(persistedState).toMatchObject({
-      studentsByClassAndName: {
-        [`${CLASSROOM}::legacy_01`]: 'student_legacy_1',
-      },
-    });
+
+    // The classroom and student should now live in the normalized tables.
+    expect(neonStore.classrooms.has(CLASSROOM)).toBe(true);
+    const studentRow = Array.from(neonStore.studentsById.values()).find(
+      (s) => s.username === 'legacy_01',
+    );
+    expect(studentRow).toBeDefined();
+    expect(studentRow?.classroom_code).toBe(CLASSROOM);
   });
 });

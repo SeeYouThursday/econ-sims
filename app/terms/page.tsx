@@ -24,7 +24,7 @@ export default function TermsOfService() {
             <div className="text-slate-700 space-y-3 font-medium text-sm leading-relaxed">
               <p>
                 <strong>Simulation Only: </strong> All data, prices, and
-                &quot;money&quot; shown on M. G &apos; Civics Lab are for
+                &quot;money&quot; shown on Mr. G&apos;s Civics Lab are for
                 educational simulation only. No real currency is ever used,
                 earned, or traded.
               </p>
@@ -63,9 +63,10 @@ export default function TermsOfService() {
               </h2>
             </div>
             <p className="text-slate-700 text-sm leading-relaxed italic">
-              Civics Lab is provided &quot;as is&quot; without any warranties.
-              We are not liable for any technical inaccuracies in market data or
-              for any perceived &quot;losses&quot; in the virtual simulation.
+              Mr. G&apos;s Civics Lab is provided &quot;as is&quot; without any
+              warranties. We are not liable for any technical inaccuracies in
+              market data or for any perceived &quot;losses&quot; in the virtual
+              simulation.
             </p>
           </section>
 

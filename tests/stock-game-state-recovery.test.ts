@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createNormalizedNeonMock } from './_helpers/normalized-neon-mock';
 
 describe('stock game state recovery from alias store', () => {
   beforeEach(() => {
@@ -14,57 +15,34 @@ describe('stock game state recovery from alias store', () => {
       await import('../lib/passcodeCipher');
     const encryptedPasscode = encryptRecoverablePasscode('pass1234');
 
-    const sql = vi.fn(
-      async (strings: TemplateStringsArray, ...values: unknown[]) => {
-        const query = strings.join(' ');
-
-        if (query.includes('CREATE TABLE IF NOT EXISTS stock_game_state')) {
-          return [];
-        }
-
-        if (
-          query.includes('SELECT data') &&
-          query.includes('stock_game_state')
-        ) {
-          return [
-            {
-              data: JSON.stringify({
-                classrooms: {
-                  RBDMRE: {
-                    code: 'RBDMRE',
-                    teacherPasscodeHash: 'fakehash',
-                    createdAt: '2026-04-29T19:08:46.755Z',
-                  },
-                },
-                students: {},
-                studentsByClassAndName: {},
-                sessions: {},
-                trades: [],
-                marketPricesByClass: {},
-              }),
-            },
-          ];
-        }
-
-        if (query.includes('SELECT classroom_code, username')) {
-          return [
-            {
-              classroom_code: 'RBDMRE',
-              username: 'steady_turtle17',
-              student_passcode_encrypted: encryptedPasscode,
-              is_active: true,
-              created_at: '2026-04-29T19:08:46.755Z',
-            },
-          ];
-        }
-
-        if (query.includes('INSERT INTO stock_game_state')) {
-          return [];
-        }
-
-        return [];
-      },
-    );
+    // Pre-seed the normalized mock with a classroom but no student. The alias
+    // table contains the recoverable credentials for steady_turtle17.
+    const { sql, store: neonStore } = createNormalizedNeonMock({
+      classrooms: new Map([
+        [
+          'RBDMRE',
+          {
+            code: 'RBDMRE',
+            teacher_passcode_hash: 'fakehash',
+            owner_teacher_id: null,
+            title: null,
+            starting_cash: null,
+            duration_days: null,
+            created_at: '2026-04-29T19:08:46.755Z',
+            updated_at: '2026-04-29T19:08:46.755Z',
+          },
+        ],
+      ]),
+      aliases: [
+        {
+          classroom_code: 'RBDMRE',
+          username: 'steady_turtle17',
+          student_passcode_encrypted: encryptedPasscode,
+          is_active: true,
+          created_at: '2026-04-29T19:08:46.755Z',
+        },
+      ],
+    });
 
     vi.doMock('../lib/neon', () => ({
       isNeonConfigured: () => true,
@@ -81,5 +59,12 @@ describe('stock game state recovery from alias store', () => {
     expect(session.classroomCode).toBe('RBDMRE');
     expect(session.username).toBe('steady_turtle17');
     expect(session.token).toBeTypeOf('string');
+
+    // The recovered student should now exist in the normalized students table.
+    const recovered = Array.from(neonStore.studentsById.values()).find(
+      (s) => s.username === 'steady_turtle17',
+    );
+    expect(recovered).toBeDefined();
+    expect(recovered?.classroom_code).toBe('RBDMRE');
   });
 });
