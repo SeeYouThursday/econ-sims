@@ -12,6 +12,7 @@ import {
   placeTrade,
   StockGameError,
 } from '@/lib/stockGameStore';
+import { fetchLatestClosePriceQuote } from '@/lib/polygonPrices';
 
 export const runtime = 'nodejs';
 
@@ -22,66 +23,24 @@ type TradeBody = {
   shares?: number;
 };
 
-function normalizeSymbol(symbol: string) {
-  return symbol.trim().toUpperCase();
-}
-
-function formatDate(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
 async function getServerExecutionPrice(symbolInput: string) {
-  const apiKey = process.env.POLYGON_API_KEY;
-  if (!apiKey) {
-    throw new StockGameError('Market quote service is unavailable.', 503);
+  const result = await fetchLatestClosePriceQuote(symbolInput);
+  if (result.ok) {
+    return { price: result.price, quoteAsOf: result.quoteAsOf };
   }
-
-  const symbol = normalizeSymbol(symbolInput);
-  if (!/^[A-Z.\-]{1,10}$/.test(symbol)) {
-    throw new StockGameError('Symbol format is invalid.');
+  switch (result.reason) {
+    case 'missing-key':
+      throw new StockGameError('Market quote service is unavailable.', 503);
+    case 'invalid-symbol':
+      throw new StockGameError('Symbol format is invalid.');
+    case 'polygon-error':
+      throw new StockGameError('Unable to load latest market quote.', 502);
+    case 'no-data':
+      throw new StockGameError(
+        'No recent market quote available for symbol.',
+        404,
+      );
   }
-
-  const to = new Date();
-  const from = new Date(to);
-  from.setDate(to.getDate() - 14);
-
-  const polygonUrl = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(
-    symbol,
-  )}/range/1/day/${formatDate(from)}/${formatDate(to)}?adjusted=true&sort=asc&limit=60&apiKey=${apiKey}`;
-
-  const polygonRes = await fetch(polygonUrl, {
-    next: { revalidate: 300 },
-  });
-
-  if (!polygonRes.ok) {
-    throw new StockGameError('Unable to load latest market quote.', 502);
-  }
-
-  const polygonJson = (await polygonRes.json()) as {
-    results?: Array<{ c?: number; t?: number }>;
-  };
-  const latest = Array.isArray(polygonJson.results)
-    ? polygonJson.results[polygonJson.results.length - 1]
-    : null;
-
-  if (!latest || typeof latest.c !== 'number' || latest.c <= 0) {
-    throw new StockGameError(
-      'No recent market quote available for symbol.',
-      404,
-    );
-  }
-
-  const quoteAsOf =
-    typeof latest.t === 'number'
-      ? new Date(latest.t).toISOString().slice(0, 10)
-      : formatDate(to);
-
-  // Polygon returns close as dollars (e.g. 187.32). Convert to integer cents
-  // at the boundary so the rest of the system stays in integer math.
-  return {
-    price: Math.round(latest.c * 100),
-    quoteAsOf,
-  };
 }
 
 export async function POST(request: Request) {
