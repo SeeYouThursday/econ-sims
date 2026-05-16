@@ -204,7 +204,9 @@ declare global {
 // starts re-init it naturally.
 let neonInitialized = false;
 
-const STARTING_CASH = 10000;
+// All money values in this module are integer cents (AGENTS.md §3).
+// 1_000_000 cents = $10,000 default starting cash.
+const STARTING_CASH = 1_000_000;
 const DEFAULT_CLASSROOM_DURATION_DAYS = 30;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LEADERBOARD_TTL_MS = 60 * 1000;
@@ -351,8 +353,8 @@ function assertPositiveShares(shares: number) {
 }
 
 function assertPositivePrice(price: number) {
-  if (!Number.isFinite(price) || price <= 0) {
-    throw new StockGameError('Price must be a positive number.');
+  if (!Number.isFinite(price) || price <= 0 || !Number.isInteger(price)) {
+    throw new StockGameError('Price must be a positive whole-cent value.');
   }
 }
 
@@ -516,9 +518,12 @@ function buildPortfolioSnapshot(
     0,
   );
 
-  const totalValue = Number((student.cash + holdingsValue).toFixed(2));
-  const pnlValue = Number((totalValue - classStartingCash).toFixed(2));
-  const pnlPercent = Number(((pnlValue / classStartingCash) * 100).toFixed(2));
+  const totalValue = student.cash + holdingsValue;
+  const pnlValue = totalValue - classStartingCash;
+  const pnlPercent =
+    classStartingCash > 0
+      ? Math.round((pnlValue / classStartingCash) * 10000) / 100
+      : 0;
 
   return {
     studentId: student.id,
@@ -530,9 +535,9 @@ function buildPortfolioSnapshot(
       classroomEndsAtMs === null
         ? null
         : new Date(classroomEndsAtMs).toISOString(),
-    cash: Number(student.cash.toFixed(2)),
+    cash: student.cash,
     positions: { ...student.positions },
-    holdingsValue: Number(holdingsValue.toFixed(2)),
+    holdingsValue,
     totalValue,
     pnlValue,
     pnlPercent,
@@ -559,13 +564,17 @@ async function ensureNormalizedTables() {
 
   const sql = getNeonSql();
 
+  // Money columns are BIGINT cents (AGENTS.md §3). Migration
+  // 002-money-as-cents.sql converts pre-existing NUMERIC/INTEGER columns on
+  // already-deployed databases; here we create the BIGINT schema directly so
+  // fresh deploys skip the conversion entirely.
   await sql`
     CREATE TABLE IF NOT EXISTS classrooms (
       code TEXT PRIMARY KEY,
       teacher_passcode_hash TEXT,
       owner_teacher_id TEXT,
       title TEXT,
-      starting_cash INTEGER,
+      starting_cash BIGINT,
       duration_days INTEGER,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -579,7 +588,7 @@ async function ensureNormalizedTables() {
       username TEXT NOT NULL,
       passcode_hash TEXT NOT NULL,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
-      cash NUMERIC(14,2) NOT NULL DEFAULT 10000,
+      cash BIGINT NOT NULL DEFAULT 1000000,
       positions JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -605,7 +614,7 @@ async function ensureNormalizedTables() {
       symbol TEXT NOT NULL,
       side TEXT NOT NULL,
       shares INTEGER NOT NULL,
-      price NUMERIC(14,2) NOT NULL,
+      price BIGINT NOT NULL,
       quote_as_of TEXT NOT NULL,
       executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -615,7 +624,7 @@ async function ensureNormalizedTables() {
     CREATE TABLE IF NOT EXISTS market_prices (
       classroom_code TEXT NOT NULL REFERENCES classrooms(code) ON DELETE CASCADE,
       symbol TEXT NOT NULL,
-      price NUMERIC(14,2) NOT NULL,
+      price BIGINT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (classroom_code, symbol)
     )
@@ -676,8 +685,13 @@ async function bootstrapFromLegacyJsonbIfNeeded() {
   ensureStockGameStateShape(parsed);
   stripLegacyStudentPasscodes(parsed);
 
-  // Migrate classrooms first (parents).
+  // Migrate classrooms first (parents). Legacy startingCash was stored as
+  // dollars — multiply to cents for the BIGINT column.
   for (const classroom of Object.values(parsed.classrooms)) {
+    const startingCashCents =
+      typeof classroom.startingCash === 'number'
+        ? Math.round(classroom.startingCash * 100)
+        : null;
     await sql`
       INSERT INTO classrooms (
         code, teacher_passcode_hash, owner_teacher_id, title,
@@ -687,7 +701,7 @@ async function bootstrapFromLegacyJsonbIfNeeded() {
         ${classroom.teacherPasscodeHash ?? null},
         ${classroom.ownerTeacherId ?? null},
         ${classroom.title ?? null},
-        ${classroom.startingCash ?? null},
+        ${startingCashCents},
         ${classroom.durationDays ?? null},
         ${classroom.createdAt}
       )
@@ -695,7 +709,14 @@ async function bootstrapFromLegacyJsonbIfNeeded() {
     `;
   }
 
+  // Legacy JSONB stored money as dollars-as-decimal. The normalized schema is
+  // BIGINT cents, so multiply by 100 on the way in. STARTING_CASH is already
+  // in cents.
   for (const student of Object.values(parsed.students)) {
+    const cashCents =
+      typeof student.cash === 'number'
+        ? Math.round(student.cash * 100)
+        : STARTING_CASH;
     await sql`
       INSERT INTO students (
         id, classroom_code, username, passcode_hash,
@@ -706,7 +727,7 @@ async function bootstrapFromLegacyJsonbIfNeeded() {
         ${normalizeUsername(student.username)},
         ${student.passcodeHash},
         ${student.isActive ?? true},
-        ${student.cash ?? STARTING_CASH},
+        ${cashCents},
         ${JSON.stringify(student.positions ?? {})}::jsonb,
         ${student.createdAt}
       )
@@ -728,7 +749,11 @@ async function bootstrapFromLegacyJsonbIfNeeded() {
     `;
   }
 
+  // Trade and market_prices values in the legacy JSONB are also dollars-as-
+  // decimal — convert to cents before writing to the BIGINT columns.
   for (const trade of parsed.trades) {
+    const priceCents =
+      typeof trade.price === 'number' ? Math.round(trade.price * 100) : 0;
     await sql`
       INSERT INTO trades (
         id, classroom_code, student_id, symbol, side,
@@ -740,7 +765,7 @@ async function bootstrapFromLegacyJsonbIfNeeded() {
         ${trade.symbol},
         ${trade.side},
         ${trade.shares},
-        ${trade.price},
+        ${priceCents},
         ${trade.quoteAsOf},
         ${trade.executedAt}
       )
@@ -752,9 +777,11 @@ async function bootstrapFromLegacyJsonbIfNeeded() {
     parsed.marketPricesByClass,
   )) {
     for (const [symbol, price] of Object.entries(symbols)) {
+      const priceCents =
+        typeof price === 'number' ? Math.round(price * 100) : 0;
       await sql`
         INSERT INTO market_prices (classroom_code, symbol, price)
-        VALUES (${classroomCode}, ${symbol}, ${price})
+        VALUES (${classroomCode}, ${symbol}, ${priceCents})
         ON CONFLICT (classroom_code, symbol) DO UPDATE SET
           price = EXCLUDED.price,
           updated_at = NOW()
@@ -1659,8 +1686,10 @@ export async function placeTrade(input: PlaceTradeInput) {
   assertPositiveShares(input.shares);
   assertPositivePrice(input.price);
 
-  const cost = Number((input.shares * input.price).toFixed(2));
-  const price = Number(input.price.toFixed(2));
+  // Both input.shares (int) and input.price (cents) are integers, so cost is
+  // an exact integer cents value. No rounding/toFixed needed.
+  const cost = input.shares * input.price;
+  const price = input.price;
   const executedAt = nowIso();
   const quoteAsOf = input.quoteAsOf?.trim() || executedAt.slice(0, 10);
 
@@ -1784,13 +1813,13 @@ export async function placeTrade(input: PlaceTradeInput) {
     if (student.cash < cost) {
       throw new StockGameError('Insufficient cash to place buy order.');
     }
-    student.cash = Number((student.cash - cost).toFixed(2));
+    student.cash = student.cash - cost;
     student.positions[symbol] = currentShares + input.shares;
   } else {
     if (currentShares < input.shares) {
       throw new StockGameError('Insufficient shares to place sell order.');
     }
-    student.cash = Number((student.cash + cost).toFixed(2));
+    student.cash = student.cash + cost;
     const remaining = currentShares - input.shares;
     if (remaining > 0) {
       student.positions[symbol] = remaining;
@@ -1872,7 +1901,7 @@ export async function listStudentTrades(
           symbol: String(row.symbol),
           side: row.side as TradeSide,
           shares: Number(row.shares),
-          price: Number(Number(row.price).toFixed(2)),
+          price: Number(row.price),
           quoteAsOf: String(row.quote_as_of),
           executedAt: new Date(String(row.executed_at)).toISOString(),
         })),
@@ -1895,7 +1924,7 @@ export async function listStudentTrades(
       symbol: trade.symbol,
       side: trade.side,
       shares: trade.shares,
-      price: Number(trade.price.toFixed(2)),
+      price: trade.price,
       quoteAsOf: trade.quoteAsOf,
       executedAt: trade.executedAt,
     }));
@@ -1970,13 +1999,16 @@ export async function getLeaderboard(
 
       // Single SQL aggregation: students × market_prices → totals.
       // Computes holdingsValue server-side, returning ranked entries.
+      // All money columns are BIGINT cents — shares (INT) × price (BIGINT) and
+      // cash + holdings_value stay integer; result comes back as a JS number
+      // or numeric-string from the driver and is coerced once with Number().
       const rows = (await sql`
         WITH student_holdings AS (
           SELECT
             s.id,
             s.username,
             s.cash,
-            COALESCE(SUM((value)::numeric * COALESCE(mp.price, 0)), 0) AS holdings_value
+            COALESCE(SUM((value)::bigint * COALESCE(mp.price, 0)), 0) AS holdings_value
           FROM students s
           LEFT JOIN LATERAL jsonb_each_text(s.positions) AS p(symbol, value) ON TRUE
           LEFT JOIN market_prices mp
@@ -2001,9 +2033,9 @@ export async function getLeaderboard(
       const entries: LeaderboardEntry[] = rows.map((row, index) => ({
         rank: index + 1,
         username: row.username,
-        cash: Number(Number(row.cash).toFixed(2)),
-        holdingsValue: Number(Number(row.holdings_value).toFixed(2)),
-        totalValue: Number(Number(row.total_value).toFixed(2)),
+        cash: Number(row.cash),
+        holdingsValue: Number(row.holdings_value),
+        totalValue: Number(row.total_value),
       }));
 
       const response: LeaderboardResponse = {
@@ -2247,7 +2279,7 @@ export async function listStudentsForClassroom(input: ListStudentsInput) {
         WITH student_holdings AS (
           SELECT
             s.id, s.username, s.is_active, s.cash, s.created_at,
-            COALESCE(SUM((value)::numeric * COALESCE(mp.price, 0)), 0) AS holdings_value
+            COALESCE(SUM((value)::bigint * COALESCE(mp.price, 0)), 0) AS holdings_value
           FROM students s
           LEFT JOIN LATERAL jsonb_each_text(s.positions) AS p(symbol, value) ON TRUE
           LEFT JOIN market_prices mp
@@ -2282,9 +2314,9 @@ export async function listStudentsForClassroom(input: ListStudentsInput) {
         username: row.username,
         createdAt: new Date(row.created_at).toISOString(),
         isActive: Boolean(row.is_active),
-        cash: Number(Number(row.cash).toFixed(2)),
-        holdingsValue: Number(Number(row.holdings_value).toFixed(2)),
-        totalValue: Number(Number(row.total_value).toFixed(2)),
+        cash: Number(row.cash),
+        holdingsValue: Number(row.holdings_value),
+        totalValue: Number(row.total_value),
         hasActiveSession: Boolean(row.has_active_session),
       }));
 

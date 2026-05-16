@@ -14,12 +14,13 @@
 -- (see lib/stockGameStore.ts ensureNormalizedTables()), so production deploys
 -- can apply this migration as belt-and-suspenders or rely on the lazy path.
 --
--- TRANSITIONAL MONEY SCHEMA: cash and price columns are NUMERIC(14,2) to
--- preserve the existing dollars-as-decimal behavior carried over from the
--- legacy JSONB row. AGENTS.md section 3 mandates integer cents; a follow-up
--- migration (002-money-as-cents.sql) is planned to migrate cash/price to
--- BIGINT cents and update the application's read/write paths in lockstep.
--- Do not extend NUMERIC arithmetic outside this transitional window.
+-- TRANSITIONAL MONEY SCHEMA: cash and price columns are NUMERIC(14,2) here so
+-- this migration can be re-run safely against a database that still holds the
+-- pre-cents schema. Follow-up migration 002-money-as-cents.sql converts these
+-- to BIGINT cents (AGENTS.md section 3), and the lazy DDL in
+-- lib/stockGameStore.ts creates the columns as BIGINT directly on fresh
+-- deploys. After 002 has run everywhere, this NUMERIC declaration is
+-- effectively dead — keep it for re-runs against older databases.
 
 CREATE TABLE IF NOT EXISTS classrooms (
   code TEXT PRIMARY KEY,

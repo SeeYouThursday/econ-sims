@@ -5,7 +5,9 @@ import { createNormalizedNeonMock } from './_helpers/normalized-neon-mock';
 const CLASSROOM = 'TRD101';
 const TEACHER_PASSCODE = 'teacher-trd';
 const STUDENT_PASSCODE = 'pass1234';
-const STARTING_CASH = 10000;
+// Money values throughout are integer cents (AGENTS.md §3).
+// 1_000_000 cents = $10,000 default starting cash.
+const STARTING_CASH = 1_000_000;
 
 function seededClassroomMock() {
   return createNormalizedNeonMock({
@@ -62,42 +64,44 @@ describe('placeTrade against normalized mock', () => {
       studentPasscode: STUDENT_PASSCODE,
     });
 
+    // 10 shares @ $100 = 10 * 10_000 cents = 100_000 cents debited.
     const buyResult = await placeTrade({
       token,
       symbol: 'AAPL',
       side: 'buy',
       shares: 10,
-      price: 100,
+      price: 10_000,
       quoteAsOf: '2026-05-01',
     });
 
     expect(buyResult.storage).toBe('neon');
-    expect(buyResult.portfolio.cash).toBe(STARTING_CASH - 1000);
+    expect(buyResult.portfolio.cash).toBe(STARTING_CASH - 100_000);
     expect(buyResult.portfolio.positions.AAPL).toBe(10);
 
     const studentAfterBuy = neonStore.studentsById.get(studentId);
-    expect(studentAfterBuy?.cash).toBe(STARTING_CASH - 1000);
+    expect(studentAfterBuy?.cash).toBe(STARTING_CASH - 100_000);
     expect(
       (studentAfterBuy?.positions as Record<string, number>)?.AAPL,
     ).toBe(10);
 
+    // 4 shares @ $110 = 4 * 11_000 cents = 44_000 cents credited.
     const sellResult = await placeTrade({
       token,
       symbol: 'AAPL',
       side: 'sell',
       shares: 4,
-      price: 110,
+      price: 11_000,
       quoteAsOf: '2026-05-02',
     });
 
-    expect(sellResult.portfolio.cash).toBe(STARTING_CASH - 1000 + 440);
+    expect(sellResult.portfolio.cash).toBe(STARTING_CASH - 100_000 + 44_000);
     expect(sellResult.portfolio.positions.AAPL).toBe(6);
 
     expect(neonStore.trades).toHaveLength(2);
     expect(neonStore.trades.map((t) => t.side)).toEqual(['buy', 'sell']);
 
     const aaplPrice = neonStore.marketPrices.get(CLASSROOM)?.get('AAPL');
-    expect(Number(aaplPrice?.price)).toBe(110);
+    expect(Number(aaplPrice?.price)).toBe(11_000);
   });
 
   it('rejects a buy that exceeds cash without mutating cash or positions', async () => {
@@ -123,13 +127,14 @@ describe('placeTrade against normalized mock', () => {
       studentPasscode: STUDENT_PASSCODE,
     });
 
+    // 999 shares @ $100 = 9_990_000 cents, far exceeds 1_000_000 starting.
     await expect(
       placeTrade({
         token,
         symbol: 'AAPL',
         side: 'buy',
         shares: 999,
-        price: 100,
+        price: 10_000,
         quoteAsOf: '2026-05-01',
       }),
     ).rejects.toThrow('Insufficient cash');
@@ -169,7 +174,7 @@ describe('placeTrade against normalized mock', () => {
         symbol: 'AAPL',
         side: 'sell',
         shares: 1,
-        price: 100,
+        price: 10_000,
         quoteAsOf: '2026-05-01',
       }),
     ).rejects.toThrow('Insufficient shares');
@@ -243,17 +248,18 @@ describe('manageStudent against normalized mock', () => {
       username: 'reset_01',
       studentPasscode: STUDENT_PASSCODE,
     });
+    // 5 shares @ $100 = 50_000 cents debited.
     await placeTrade({
       token,
       symbol: 'AAPL',
       side: 'buy',
       shares: 5,
-      price: 100,
+      price: 10_000,
       quoteAsOf: '2026-05-01',
     });
 
     expect(neonStore.studentsById.get(studentId)?.cash).toBe(
-      STARTING_CASH - 500,
+      STARTING_CASH - 50_000,
     );
 
     await manageStudent({

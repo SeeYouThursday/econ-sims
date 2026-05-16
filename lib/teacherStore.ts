@@ -55,7 +55,11 @@ function validateClassroomTitle(title: string) {
   return trimmed;
 }
 
-const DEFAULT_STARTING_CASH = 10000;
+// Starting cash is stored and exchanged with the API as integer cents
+// (AGENTS.md §3). 1_000_000 cents = $10,000 default.
+const DEFAULT_STARTING_CASH = 1_000_000;
+const MIN_STARTING_CASH_CENTS = 10_000; // $100
+const MAX_STARTING_CASH_CENTS = 100_000_000; // $1,000,000
 
 function validateStartingCash(startingCash: unknown) {
   const parsed =
@@ -63,8 +67,15 @@ function validateStartingCash(startingCash: unknown) {
       ? startingCash
       : Number(startingCash ?? DEFAULT_STARTING_CASH);
 
-  if (!Number.isFinite(parsed) || parsed < 100 || parsed > 1_000_000) {
-    throw new Error('Starting cash must be between 100 and 1,000,000.');
+  if (
+    !Number.isFinite(parsed) ||
+    !Number.isInteger(parsed) ||
+    parsed < MIN_STARTING_CASH_CENTS ||
+    parsed > MAX_STARTING_CASH_CENTS
+  ) {
+    throw new Error(
+      'Starting cash must be a whole-cent value between $100 and $1,000,000.',
+    );
   }
 
   return Math.trunc(parsed);
@@ -135,14 +146,14 @@ async function ensureTeacherTables() {
       teacher_id TEXT NOT NULL REFERENCES stock_game_teachers(id) ON DELETE CASCADE,
       code TEXT NOT NULL UNIQUE,
       title TEXT NOT NULL,
-      starting_cash INTEGER NOT NULL DEFAULT 10000,
+      starting_cash BIGINT NOT NULL DEFAULT 1000000,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
 
   await sql`
     ALTER TABLE stock_game_classrooms
-    ADD COLUMN IF NOT EXISTS starting_cash INTEGER NOT NULL DEFAULT 10000
+    ADD COLUMN IF NOT EXISTS starting_cash BIGINT NOT NULL DEFAULT 1000000
   `;
 
   await sql`

@@ -159,7 +159,8 @@ describe('students route classroom resync', () => {
         classroomCode: 'ABC123',
         username: 'student_01',
         studentPasscode: 'pass1234',
-        startingCash: 10000,
+        // startingCash is integer cents (AGENTS.md §3); 1_000_000 = $10,000.
+        startingCash: 1_000_000,
         createdAt: '2026-01-01T00:00:00.000Z',
         storage: 'memory',
       })),

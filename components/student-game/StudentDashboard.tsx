@@ -12,6 +12,11 @@ import {
 } from 'recharts';
 import { Activity, BarChart3, Clock, Trophy, Wallet } from 'lucide-react';
 import {
+  formatCents,
+  formatCentsWhole,
+  formatSignedCents,
+} from '@/lib/formatCents';
+import {
   fetchLeaderboard,
   fetchPortfolio,
   fetchTradeHistory,
@@ -48,19 +53,6 @@ function isSessionTokenError(message: string) {
   );
 }
 
-function formatCurrency(value: number) {
-  return value.toLocaleString(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  });
-}
-
-function formatSignedCurrency(value: number) {
-  const sign = value >= 0 ? '+' : '-';
-  return `${sign}${formatCurrency(Math.abs(value))}`;
-}
-
 function formatShortTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -76,9 +68,8 @@ function formatShortTime(value: string) {
 function buildInitialPerformancePoints(
   portfolio: PortfolioSnapshot,
 ): PerformancePoint[] {
-  const startingValue = Number(
-    (portfolio.totalValue - portfolio.pnlValue).toFixed(2),
-  );
+  // totalValue and pnlValue are integer cents — subtracting them stays exact.
+  const startingValue = portfolio.totalValue - portfolio.pnlValue;
   const asOf = new Date().toISOString();
 
   return [
@@ -122,10 +113,10 @@ function PortfolioTrendCard({
             Virtual portfolio
           </p>
           <p className="mt-3 text-4xl font-black tracking-tight text-slate-900">
-            {formatCurrency(portfolio.totalValue)}
+            {formatCents(portfolio.totalValue)}
           </p>
           <p className={`mt-2 text-sm font-bold ${pnlToneClass}`}>
-            {formatSignedCurrency(portfolio.pnlValue)} (
+            {formatSignedCents(portfolio.pnlValue)} (
             {portfolio.pnlPercent >= 0 ? '+' : ''}
             {portfolio.pnlPercent.toFixed(2)}%)
           </p>
@@ -138,7 +129,7 @@ function PortfolioTrendCard({
               Cash
             </div>
             <p className="mt-2 truncate text-lg font-black text-slate-900">
-              {formatCurrency(portfolio.cash)}
+              {formatCents(portfolio.cash)}
             </p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
@@ -147,7 +138,7 @@ function PortfolioTrendCard({
               Holdings
             </div>
             <p className="mt-2 truncate text-lg font-black text-slate-900">
-              {formatCurrency(portfolio.holdingsValue)}
+              {formatCents(portfolio.holdingsValue)}
             </p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
@@ -201,9 +192,7 @@ function PortfolioTrendCard({
               axisLine={false}
             />
             <YAxis
-              tickFormatter={(value: number) =>
-                `$${Math.round(value).toLocaleString()}`
-              }
+              tickFormatter={(value: number) => formatCentsWhole(value)}
               tick={{ fontSize: 11, fill: '#475569' }}
               tickLine={false}
               axisLine={false}
@@ -214,8 +203,8 @@ function PortfolioTrendCard({
                 if (typeof value === 'number') {
                   return [
                     name === 'pnlValue'
-                      ? formatSignedCurrency(value)
-                      : formatCurrency(value),
+                      ? formatSignedCents(value)
+                      : formatCents(value),
                     name === 'pnlValue' ? 'Change' : 'Portfolio value',
                   ];
                 }
@@ -405,7 +394,7 @@ export default function StudentDashboard({
         },
       ]);
       setLastFillMessage(
-        `Filled at $${trade.latestPrice.toFixed(2)} (quote ${trade.quoteAsOf}) on ${new Date(trade.executedAt).toLocaleString()}.`,
+        `Filled at ${formatCents(trade.latestPrice)} (quote ${trade.quoteAsOf}) on ${new Date(trade.executedAt).toLocaleString()}.`,
       );
       const [nextLeaderboard, nextTradeHistory] = await Promise.all([
         fetchLeaderboard(session.classroomCode),

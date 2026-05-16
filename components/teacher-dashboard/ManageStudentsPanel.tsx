@@ -1,4 +1,5 @@
 import type { ClassroomStudent } from '@/components/teacher-dashboard/types';
+import { formatCents } from '@/lib/formatCents';
 
 type ManageTab = 'single' | 'bulk' | 'roster';
 
@@ -241,7 +242,7 @@ export function ManageStudentsPanel({
                           {student.username}
                         </p>
                         <p className="text-[11px] text-slate-500">
-                          ${student.totalValue.toFixed(2)}
+                          {formatCents(student.totalValue)}
                           {student.isActive && (
                             <span className="ml-2">
                               {student.hasActiveSession

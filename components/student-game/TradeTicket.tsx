@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { fetchTickerNames, fetchTradeQuote } from './api';
 import type { StockQuote } from './types';
+import { formatCents } from '@/lib/formatCents';
 import { RefreshCw } from 'lucide-react';
 import {
   buildTradeSubmission,
@@ -309,7 +310,7 @@ export default function TradeTicket({
                 Latest price
               </label>
               <div className="mt-1 truncate rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900">
-                {quote ? `$${quote.latestPrice.toFixed(2)}` : '—'}
+                {quote ? formatCents(quote.latestPrice) : '—'}
               </div>
             </div>
             <button
@@ -342,7 +343,7 @@ export default function TradeTicket({
           <span>Cost of trade</span>
           <span className="font-semibold text-slate-900">
             {estimatedValue !== null && Number.isFinite(estimatedValue)
-              ? `$${estimatedValue.toFixed(2)}`
+              ? formatCents(estimatedValue)
               : '—'}
           </span>
         </div>
@@ -368,8 +369,8 @@ export default function TradeTicket({
 
       {insufficientCash ? (
         <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          Insufficient cash. You have ${availableCash.toFixed(2)}, but this
-          order costs ${estimatedValue?.toFixed(2)}.
+          Insufficient cash. You have {formatCents(availableCash)}, but this
+          order costs {formatCents(estimatedValue ?? 0)}.
         </div>
       ) : null}
 

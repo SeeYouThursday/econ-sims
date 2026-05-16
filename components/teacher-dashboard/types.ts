@@ -1,6 +1,10 @@
+// All monetary fields below are integer cents (AGENTS.md §3). The teacher UI
+// converts to/from dollars at the input/display boundary; everything else
+// stays in cents.
 export type TeacherClassroom = {
   code: string;
   title: string;
+  /** cents */
   startingCash: number;
   durationDays: number;
   createdAt: string;
@@ -15,8 +19,11 @@ export type ClassroomStudent = {
   username: string;
   createdAt: string;
   isActive: boolean;
+  /** cents */
   cash: number;
+  /** cents */
   holdingsValue: number;
+  /** cents */
   totalValue: number;
   hasActiveSession: boolean;
 };

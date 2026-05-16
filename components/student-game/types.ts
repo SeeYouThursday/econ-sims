@@ -5,25 +5,35 @@ export type StudentSession = {
   expiresAt: string;
 };
 
+// All monetary fields below are integer cents (AGENTS.md §3). Convert at the
+// display boundary with lib/formatCents — never inline `value / 100`.
 export type PortfolioSnapshot = {
   studentId: string;
   classroomCode: string;
   username: string;
   classroomActive: boolean;
   classroomEndsAt: string | null;
+  /** cents */
   cash: number;
   positions: Record<string, number>;
+  /** cents */
   holdingsValue: number;
+  /** cents */
   totalValue: number;
+  /** cents */
   pnlValue: number;
+  /** percentage with 2 decimal places (e.g. 12.34 means +12.34%) */
   pnlPercent: number;
 };
 
 export type LeaderboardEntry = {
   rank: number;
   username: string;
+  /** cents */
   cash: number;
+  /** cents */
   holdingsValue: number;
+  /** cents */
   totalValue: number;
 };
 
@@ -36,6 +46,7 @@ export type LeaderboardResponse = {
 
 export type TradeResult = {
   portfolio: PortfolioSnapshot;
+  /** cents per share */
   latestPrice: number;
   quoteAsOf: string;
   executedAt: string;
@@ -47,6 +58,7 @@ export type StudentTradeHistoryEntry = {
   symbol: string;
   side: 'buy' | 'sell';
   shares: number;
+  /** cents per share */
   price: number;
   quoteAsOf: string;
   executedAt: string;
@@ -61,6 +73,7 @@ export type StudentTradeHistoryResponse = {
 
 export type StockQuote = {
   symbol: string;
+  /** cents per share */
   latestPrice: number;
   asOf: string;
 };

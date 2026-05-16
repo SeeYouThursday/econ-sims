@@ -118,7 +118,10 @@ describe('/api/stock-game routes', () => {
     const tradePayload = (await tradeRes.json()) as {
       portfolio: { cash: number; positions: Record<string, number> };
     };
-    expect(tradePayload.portfolio.cash).toBe(9000);
+    // Money values are integer cents (AGENTS.md §3). $100 Polygon quote
+    // becomes 10_000 cents at the route boundary, so buying 10 shares costs
+    // 100_000 cents from a 1_000_000 cents ($10,000) starting balance.
+    expect(tradePayload.portfolio.cash).toBe(900_000);
     expect(tradePayload.portfolio.positions.AAPL).toBe(10);
 
     const portfolioRes = await portfolioRoute.GET(
@@ -133,8 +136,8 @@ describe('/api/stock-game routes', () => {
       holdingsValue: number;
     };
 
-    expect(portfolioPayload.holdingsValue).toBe(1000);
-    expect(portfolioPayload.totalValue).toBe(10000);
+    expect(portfolioPayload.holdingsValue).toBe(100_000);
+    expect(portfolioPayload.totalValue).toBe(1_000_000);
   });
 
   it('recovers student login when the alias lookup index is missing', async () => {
@@ -288,8 +291,8 @@ describe('/api/stock-game routes', () => {
     expect(leaderboard.entries).toHaveLength(2);
     expect(leaderboard.entries[0]?.username).toBe('student_a1');
     expect(leaderboard.entries[0]?.rank).toBe(1);
-    expect(leaderboard.entries[0]?.totalValue).toBe(10000);
-    expect(leaderboard.entries[1]?.totalValue).toBe(10000);
+    expect(leaderboard.entries[0]?.totalValue).toBe(1_000_000);
+    expect(leaderboard.entries[1]?.totalValue).toBe(1_000_000);
     expect(leaderboard.source).toBe('computed');
 
     const cachedRes = await leaderboardRoute.GET(
@@ -449,7 +452,7 @@ describe('/api/stock-game routes', () => {
       cash: number;
       positions: Record<string, number>;
     };
-    expect(portfolioAfterReset.cash).toBe(10000);
+    expect(portfolioAfterReset.cash).toBe(1_000_000);
     expect(Object.keys(portfolioAfterReset.positions)).toHaveLength(0);
 
     const deactivateRes = await studentsRoute.PATCH(
@@ -649,10 +652,10 @@ describe('/api/stock-game routes', () => {
       executedAt: string;
       portfolio: { cash: number };
     };
-    expect(tradePayload.latestPrice).toBe(100);
+    expect(tradePayload.latestPrice).toBe(10_000);
     expect(tradePayload.quoteAsOf).toBeTypeOf('string');
     expect(tradePayload.executedAt).toBeTypeOf('string');
-    expect(tradePayload.portfolio.cash).toBe(9900);
+    expect(tradePayload.portfolio.cash).toBe(990_000);
 
     const portfolioRes = await portfolioRoute.GET(
       new Request(
@@ -665,8 +668,8 @@ describe('/api/stock-game routes', () => {
       totalValue: number;
     };
 
-    expect(portfolioPayload.holdingsValue).toBe(100);
-    expect(portfolioPayload.totalValue).toBe(10000);
+    expect(portfolioPayload.holdingsValue).toBe(10_000);
+    expect(portfolioPayload.totalValue).toBe(1_000_000);
   });
 
   it('returns recent trade history for a signed-in student token', async () => {
@@ -739,7 +742,7 @@ describe('/api/stock-game routes', () => {
     expect(historyPayload.trades[0]?.symbol).toBe('AAPL');
     expect(historyPayload.trades[0]?.side).toBe('buy');
     expect(historyPayload.trades[0]?.shares).toBe(2);
-    expect(historyPayload.trades[0]?.price).toBe(100);
+    expect(historyPayload.trades[0]?.price).toBe(10_000);
     expect(historyPayload.trades[0]?.quoteAsOf).toBeTypeOf('string');
     expect(historyPayload.trades[0]?.executedAt).toBeTypeOf('string');
   });
@@ -1006,7 +1009,7 @@ describe('/api/stock-game routes', () => {
       positions: Record<string, number>;
       classroomActive: boolean;
     };
-    expect(portfolio.cash).toBe(10000);
+    expect(portfolio.cash).toBe(1_000_000);
     expect(Object.keys(portfolio.positions)).toHaveLength(0);
     expect(portfolio.classroomActive).toBe(true);
   });

@@ -51,7 +51,9 @@ describe('teacher classroom routes', () => {
     };
     expect(created.title).toBe('Period 3 Economics');
     expect(created.code).toHaveLength(6);
-    expect(created.startingCash).toBe(10000);
+    // startingCash is integer cents on the API (AGENTS.md §3).
+    // 1_000_000 cents = $10,000 default.
+    expect(created.startingCash).toBe(1_000_000);
     expect(created.durationDays).toBe(30); // default
 
     const listRes = await classroomsRoute.GET();
@@ -65,7 +67,7 @@ describe('teacher classroom routes', () => {
     }>;
     expect(classrooms).toHaveLength(1);
     expect(classrooms[0]?.code).toBe(created.code);
-    expect(classrooms[0]?.startingCash).toBe(10000);
+    expect(classrooms[0]?.startingCash).toBe(1_000_000);
     expect(classrooms[0]?.durationDays).toBe(30);
   });
 
@@ -78,7 +80,8 @@ describe('teacher classroom routes', () => {
         method: 'POST',
         body: JSON.stringify({
           title: 'Period 1 Economics',
-          startingCash: 25000,
+          // $25,000 in cents.
+          startingCash: 2_500_000,
         }),
       }),
     );
@@ -88,7 +91,7 @@ describe('teacher classroom routes', () => {
       code: string;
       startingCash: number;
     };
-    expect(created.startingCash).toBe(25000);
+    expect(created.startingCash).toBe(2_500_000);
 
     const createStudentRes = await studentsRoute.POST(
       new Request('http://localhost/api/stock-game/students', {
@@ -105,21 +108,22 @@ describe('teacher classroom routes', () => {
     const createdStudent = (await createStudentRes.json()) as {
       startingCash: number;
     };
-    expect(createdStudent.startingCash).toBe(25000);
+    expect(createdStudent.startingCash).toBe(2_500_000);
 
     const updateRes = await classroomsRoute.PATCH(
       new Request('http://localhost/api/teacher/classrooms', {
         method: 'PATCH',
         body: JSON.stringify({
           classroomCode: created.code,
-          startingCash: 5000,
+          // $5,000 in cents.
+          startingCash: 500_000,
         }),
       }),
     );
 
     expect(updateRes.status).toBe(200);
     const updated = (await updateRes.json()) as { startingCash: number };
-    expect(updated.startingCash).toBe(5000);
+    expect(updated.startingCash).toBe(500_000);
 
     const createStudentRes2 = await studentsRoute.POST(
       new Request('http://localhost/api/stock-game/students', {
@@ -136,7 +140,7 @@ describe('teacher classroom routes', () => {
     const createdStudent2 = (await createStudentRes2.json()) as {
       startingCash: number;
     };
-    expect(createdStudent2.startingCash).toBe(5000);
+    expect(createdStudent2.startingCash).toBe(500_000);
   });
 
   it('lets a signed-in teacher create a student in an owned classroom without a shared passcode', async () => {
@@ -403,7 +407,8 @@ describe('teacher classroom routes', () => {
         method: 'POST',
         body: JSON.stringify({
           title: 'Period 4 Economics',
-          startingCash: 7500,
+          // $7,500 in cents.
+          startingCash: 750_000,
         }),
       }),
     );
@@ -444,7 +449,7 @@ describe('teacher classroom routes', () => {
     expect(resetPayload.classroomCode).toBe(classroom.code);
     expect(resetPayload.action).toBe('reset-all');
     expect(resetPayload.studentCount).toBe(2);
-    expect(resetPayload.startingCash).toBe(7500);
+    expect(resetPayload.startingCash).toBe(750_000);
   });
 
   it('supports creating classrooms with custom duration days', async () => {
@@ -455,7 +460,8 @@ describe('teacher classroom routes', () => {
         method: 'POST',
         body: JSON.stringify({
           title: 'Summer Intensive',
-          startingCash: 15000,
+          // $15,000 in cents.
+          startingCash: 1_500_000,
           durationDays: 60,
         }),
       }),
@@ -469,7 +475,7 @@ describe('teacher classroom routes', () => {
       durationDays: number;
     };
     expect(created.title).toBe('Summer Intensive');
-    expect(created.startingCash).toBe(15000);
+    expect(created.startingCash).toBe(1_500_000);
     expect(created.durationDays).toBe(60);
 
     const listRes = await classroomsRoute.GET();

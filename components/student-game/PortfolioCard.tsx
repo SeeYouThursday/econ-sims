@@ -1,3 +1,4 @@
+import { formatCents, formatSignedCents } from '@/lib/formatCents';
 import { PortfolioSnapshot } from './types';
 
 export default function PortfolioCard({
@@ -18,19 +19,19 @@ export default function PortfolioCard({
         <div>
           <p className="text-xs text-slate-500">Cash Left</p>
           <p className="text-lg font-black text-slate-900">
-            ${portfolio.cash.toLocaleString()}
+            {formatCents(portfolio.cash)}
           </p>
         </div>
         <div>
           <p className="text-xs text-slate-500">Stocks I Own</p>
           <p className="text-lg font-black text-slate-900">
-            ${portfolio.holdingsValue.toLocaleString()}
+            {formatCents(portfolio.holdingsValue)}
           </p>
         </div>
         <div>
           <p className="text-xs text-slate-500">Total</p>
           <p className="text-lg font-black text-slate-900">
-            ${portfolio.totalValue.toLocaleString()}
+            {formatCents(portfolio.totalValue)}
           </p>
         </div>
       </div>
@@ -38,8 +39,7 @@ export default function PortfolioCard({
       <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
         <p className="text-xs text-slate-500">Up or Down</p>
         <p className={`text-lg font-black ${pnlToneClass}`}>
-          {pnlIsPositive ? '+' : '-'}$
-          {Math.abs(portfolio.pnlValue).toLocaleString()} (
+          {formatSignedCents(portfolio.pnlValue)} (
           {pnlIsPositive ? '+' : ''}
           {portfolio.pnlPercent.toFixed(2)}%)
         </p>
