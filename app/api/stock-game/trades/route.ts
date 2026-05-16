@@ -76,8 +76,10 @@ async function getServerExecutionPrice(symbolInput: string) {
       ? new Date(latest.t).toISOString().slice(0, 10)
       : formatDate(to);
 
+  // Polygon returns close as dollars (e.g. 187.32). Convert to integer cents
+  // at the boundary so the rest of the system stays in integer math.
   return {
-    price: Number(latest.c.toFixed(2)),
+    price: Math.round(latest.c * 100),
     quoteAsOf,
   };
 }

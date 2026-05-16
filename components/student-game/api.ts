@@ -174,15 +174,20 @@ export async function fetchTradeQuote(symbol: string): Promise<StockQuote> {
     ? candidate.candles[candidate.candles.length - 1]
     : null;
 
+  // /api/stock returns close as dollars; convert to cents at the boundary so
+  // stock-game UI consumers (TradeTicket, etc.) stay in integer math.
+  const closeDollars =
+    latestCandle && typeof latestCandle.close === 'number'
+      ? latestCandle.close
+      : Number.NaN;
   const quote = {
     symbol:
       typeof candidate.symbol === 'string'
         ? candidate.symbol
         : normalizedSymbol,
-    latestPrice:
-      latestCandle && typeof latestCandle.close === 'number'
-        ? latestCandle.close
-        : Number.NaN,
+    latestPrice: Number.isFinite(closeDollars)
+      ? Math.round(closeDollars * 100)
+      : Number.NaN,
     asOf:
       latestCandle && typeof latestCandle.date === 'string'
         ? latestCandle.date

@@ -19,6 +19,7 @@ import { ClassroomMetricsCard } from '@/components/teacher-dashboard/ClassroomMe
 import { ConfirmDialog } from '@/components/teacher-dashboard/ConfirmDialog';
 import { CreateClassroomCard } from '@/components/teacher-dashboard/CreateClassroomCard';
 import { ManageStudentsPanel } from '@/components/teacher-dashboard/ManageStudentsPanel';
+import { dollarsToCents } from '@/lib/formatCents';
 import type {
   ClassroomApiError,
   ClassroomAudit,
@@ -209,7 +210,10 @@ export default function TeacherDashboardPanel({
       return;
     }
 
-    setSelectedStartingCash(String(selectedClassroom.startingCash ?? 10000));
+    // selectedClassroom.startingCash is cents; the input field displays whole
+    // dollars, so divide here and again on every read below.
+    const cents = selectedClassroom.startingCash ?? 1_000_000;
+    setSelectedStartingCash(String(Math.round(cents / 100)));
   }, [selectedClassroom]);
 
   const createClassroom = async () => {
@@ -218,13 +222,13 @@ export default function TeacherDashboardPanel({
       return;
     }
 
-    const parsedStartingCash = Math.trunc(Number(newClassStartingCash));
+    const parsedStartingCashDollars = Math.trunc(Number(newClassStartingCash));
     if (
-      !Number.isFinite(parsedStartingCash) ||
-      parsedStartingCash < 100 ||
-      parsedStartingCash > 1_000_000
+      !Number.isFinite(parsedStartingCashDollars) ||
+      parsedStartingCashDollars < 100 ||
+      parsedStartingCashDollars > 1_000_000
     ) {
-      setError('Starting cash must be between 100 and 1,000,000.');
+      setError('Starting cash must be between $100 and $1,000,000.');
       return;
     }
 
@@ -247,7 +251,7 @@ export default function TeacherDashboardPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
-          startingCash: parsedStartingCash,
+          startingCash: dollarsToCents(parsedStartingCashDollars),
           durationDays: parsedDurationDays,
         }),
       });
@@ -296,13 +300,13 @@ export default function TeacherDashboardPanel({
       return;
     }
 
-    const parsedStartingCash = Math.trunc(Number(selectedStartingCash));
+    const parsedStartingCashDollars = Math.trunc(Number(selectedStartingCash));
     if (
-      !Number.isFinite(parsedStartingCash) ||
-      parsedStartingCash < 100 ||
-      parsedStartingCash > 1_000_000
+      !Number.isFinite(parsedStartingCashDollars) ||
+      parsedStartingCashDollars < 100 ||
+      parsedStartingCashDollars > 1_000_000
     ) {
-      setError('Starting cash must be between 100 and 1,000,000.');
+      setError('Starting cash must be between $100 and $1,000,000.');
       return;
     }
 
@@ -316,7 +320,7 @@ export default function TeacherDashboardPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           classroomCode: selectedClassroomCode,
-          startingCash: parsedStartingCash,
+          startingCash: dollarsToCents(parsedStartingCashDollars),
         }),
       });
       const payload = (await response.json().catch(() => null)) as unknown;
@@ -338,7 +342,8 @@ export default function TeacherDashboardPanel({
           classroom.code === payload.code ? payload : classroom,
         ),
       );
-      setSelectedStartingCash(String(payload.startingCash));
+      // payload.startingCash is cents; the input field shows whole dollars.
+      setSelectedStartingCash(String(Math.round(payload.startingCash / 100)));
       setStudentMessage(`Updated starting cash for ${payload.code}.`);
     } catch {
       setError('Unable to update classroom settings right now.');

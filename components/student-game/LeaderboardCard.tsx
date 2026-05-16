@@ -1,3 +1,4 @@
+import { formatCents } from '@/lib/formatCents';
 import { LeaderboardResponse } from './types';
 
 export default function LeaderboardCard({
@@ -34,7 +35,7 @@ export default function LeaderboardCard({
                 </p>
               </div>
               <p className="text-sm font-black text-slate-900">
-                ${entry.totalValue.toLocaleString()}
+                {formatCents(entry.totalValue)}
               </p>
             </div>
           ))}

@@ -342,8 +342,10 @@ export function createNormalizedNeonMock(initial?: Partial<NormalizedNeonStore>)
           // createStudentsBatch:
           //   values[0]=classroomCode, values[1]=startingCash, values[2]=createdAt,
           //   values[3]=ids[], values[4]=usernames[], values[5]=passcodeHashes[]
+          //
+          // startingCash is integer cents (AGENTS.md §3); 1_000_000 = $10,000.
           const classroomCode = values[0] as string;
-          const startingCash = Number(values[1] ?? 10000);
+          const startingCash = Number(values[1] ?? 1_000_000);
           const createdAt = values[2];
           const ids = values[3] as string[];
           const usernames = values[4] as string[];
@@ -373,21 +375,22 @@ export function createNormalizedNeonMock(initial?: Partial<NormalizedNeonStore>)
         const username = String(values[2]);
         const passcodeHash = values[3] as string;
 
+        // cash is integer cents (AGENTS.md §3); 1_000_000 = $10,000 default.
         let isActive = true;
-        let cash = 10000;
+        let cash = 1_000_000;
         let parsedPositions: Record<string, number> = {};
         let createdAt: unknown = new Date().toISOString();
 
         if (values.length === 6) {
-          cash = Number(values[4] ?? 10000);
+          cash = Number(values[4] ?? 1_000_000);
           createdAt = values[5];
         } else if (values.length === 7) {
           isActive = Boolean(values[4]);
-          cash = Number(values[5] ?? 10000);
+          cash = Number(values[5] ?? 1_000_000);
           createdAt = values[6];
         } else if (values.length === 8) {
           isActive = Boolean(values[4]);
-          cash = Number(values[5] ?? 10000);
+          cash = Number(values[5] ?? 1_000_000);
           const raw = values[6];
           if (typeof raw === 'string') {
             try {

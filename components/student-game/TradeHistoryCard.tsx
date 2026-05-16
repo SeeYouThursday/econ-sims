@@ -1,3 +1,4 @@
+import { formatCents } from '@/lib/formatCents';
 import { StudentTradeHistoryResponse } from './types';
 
 export default function TradeHistoryCard({
@@ -53,7 +54,7 @@ export default function TradeHistoryCard({
                   </td>
                   <td className="py-2 pr-3 text-slate-700">{trade.shares}</td>
                   <td className="py-2 pr-3 text-slate-700">
-                    ${trade.price.toFixed(2)}
+                    {formatCents(trade.price)}
                   </td>
                   <td className="py-2 pr-3 text-slate-600">
                     {trade.quoteAsOf}

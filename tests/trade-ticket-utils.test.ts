@@ -13,13 +13,14 @@ describe('trade ticket utils', () => {
   });
 
   it('uses the fetched quote price when building a trade submission', () => {
+    // latestPrice is integer cents (StockQuote contract): 20_532 = $205.32.
     const result = buildTradeSubmission({
       symbol: ' aapl ',
       side: 'buy',
       shares: '3',
       quote: {
         symbol: 'AAPL',
-        latestPrice: 205.32,
+        latestPrice: 20_532,
         asOf: '2026-04-07',
       },
     });
@@ -32,13 +33,14 @@ describe('trade ticket utils', () => {
   });
 
   it('calculates estimated order value from shares and fetched quote', () => {
+    // 4 shares × 12_550 cents = 50_200 cents ($502.00).
     const total = calculateEstimatedOrderValue('4', {
       symbol: 'MSFT',
-      latestPrice: 125.5,
+      latestPrice: 12_550,
       asOf: '2026-04-07',
     });
 
-    expect(total).toBe(502);
+    expect(total).toBe(50_200);
   });
 
   it('returns null estimated value when no quote is loaded', () => {

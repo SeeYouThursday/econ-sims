@@ -14,6 +14,8 @@ describe('student-game api client', () => {
   });
 
   it('fetchPortfolio returns parsed portfolio on success', async () => {
+    // Money fields are integer cents on the /api/stock-game/* boundary
+    // (AGENTS.md §3). 900_000 cents = $9,000, 1_000_000 cents = $10,000.
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -22,10 +24,10 @@ describe('student-game api client', () => {
         username: 'student_01',
         classroomActive: true,
         classroomEndsAt: '2026-05-01T00:00:00.000Z',
-        cash: 9000,
+        cash: 900_000,
         positions: { AAPL: 10 },
-        holdingsValue: 1000,
-        totalValue: 10000,
+        holdingsValue: 100_000,
+        totalValue: 1_000_000,
         pnlValue: 0,
         pnlPercent: 0,
       }),
@@ -35,7 +37,7 @@ describe('student-game api client', () => {
 
     expect(result.studentId).toBe('student_1');
     expect(result.classroomActive).toBe(true);
-    expect(result.totalValue).toBe(10000);
+    expect(result.totalValue).toBe(1_000_000);
   });
 
   it('fetchPortfolio throws server error message', async () => {
@@ -64,7 +66,7 @@ describe('student-game api client', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
-        latestPrice: 100,
+        latestPrice: 10_000,
         quoteAsOf: '2026-04-07',
         executedAt: '2026-04-07T12:00:00.000Z',
         storage: 'memory',
@@ -74,10 +76,10 @@ describe('student-game api client', () => {
           username: 'student_01',
           classroomActive: true,
           classroomEndsAt: '2026-05-01T00:00:00.000Z',
-          cash: 9000,
+          cash: 900_000,
           positions: { AAPL: 10 },
-          holdingsValue: 1000,
-          totalValue: 10000,
+          holdingsValue: 100_000,
+          totalValue: 1_000_000,
           pnlValue: 0,
           pnlPercent: 0,
         },
@@ -96,7 +98,7 @@ describe('student-game api client', () => {
       shares: 10,
     });
 
-    expect(result.latestPrice).toBe(100);
+    expect(result.latestPrice).toBe(10_000);
     expect(result.quoteAsOf).toBe('2026-04-07');
     expect(result.portfolio.positions.AAPL).toBe(10);
   });
@@ -123,6 +125,8 @@ describe('student-game api client', () => {
   });
 
   it('fetchTradeQuote returns latest candle close as quote', async () => {
+    // /api/stock returns close in dollars; fetchTradeQuote converts to cents
+    // at the boundary so the stock-game UI stays in integer math.
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -137,7 +141,7 @@ describe('student-game api client', () => {
     const result = await fetchTradeQuote('aapl');
 
     expect(result.symbol).toBe('AAPL');
-    expect(result.latestPrice).toBe(205.32);
+    expect(result.latestPrice).toBe(20_532);
     expect(result.asOf).toBe('2026-04-07');
   });
 
@@ -168,7 +172,7 @@ describe('student-game api client', () => {
             symbol: 'AAPL',
             side: 'buy',
             shares: 2,
-            price: 100,
+            price: 10_000,
             quoteAsOf: '2026-04-07',
             executedAt: '2026-04-07T12:00:00.000Z',
           },
