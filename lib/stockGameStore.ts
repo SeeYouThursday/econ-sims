@@ -3,6 +3,7 @@ import { getNeonSql, isNeonConfigured } from './neon';
 import { getRedisClient, isRedisConfigured } from './redis';
 import { __resetStudentAliasStore } from './studentAliasStore';
 import { decryptRecoverablePasscode } from './passcodeCipher';
+import { fetchLatestClosePriceCents } from './polygonPrices';
 
 type TradeSide = 'buy' | 'sell';
 
@@ -203,6 +204,49 @@ declare global {
 // Module-scoped so vi.resetModules() resets it for tests; serverless cold
 // starts re-init it naturally.
 let neonInitialized = false;
+
+// Per-classroom timestamp of the last market_prices refresh from Polygon.
+// `placeTrade` writes a fresh price for the traded symbol, but holdings in
+// other symbols would otherwise display whatever was last persisted. The
+// refresh below pulls the current quote for every symbol stored in
+// `market_prices` for the classroom, gated on this timestamp so the work runs
+// at most every PRICE_REFRESH_INTERVAL_MS. `inFlightPriceRefresh` dedupes
+// concurrent refreshes for the same classroom.
+//
+// Default interval is 12h: the Polygon plan in use returns end-of-day data
+// only, so intraday refreshes are wasted quota. Calls are throttled to stay
+// under the 5-calls/minute limit (~13s between symbol fetches).
+const lastPriceRefreshAt = new Map<string, number>();
+const inFlightPriceRefresh = new Map<string, Promise<void>>();
+
+const DEFAULT_PRICE_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
+const DEFAULT_PRICE_REFRESH_THROTTLE_MS = 13_000;
+
+function readPositiveNumberEnv(name: string, fallback: number) {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
+function getPriceRefreshIntervalMs() {
+  return readPositiveNumberEnv(
+    'STOCK_PRICE_REFRESH_INTERVAL_MS',
+    DEFAULT_PRICE_REFRESH_INTERVAL_MS,
+  );
+}
+
+function getPriceRefreshThrottleMs() {
+  return readPositiveNumberEnv(
+    'STOCK_PRICE_REFRESH_THROTTLE_MS',
+    DEFAULT_PRICE_REFRESH_THROTTLE_MS,
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
 
 // All money values in this module are integer cents (AGENTS.md §3).
 // 1_000_000 cents = $10,000 default starting cash.
@@ -995,6 +1039,79 @@ async function fetchNeonStudentByClassAndName(
     LIMIT 1
   `) as Array<Record<string, unknown>>;
   return rows[0] ? decodeNeonStudent(rows[0]) : null;
+}
+
+/**
+ * Refreshes `market_prices` for every symbol stored against `classroomCode`,
+ * gated by an in-memory TTL so the work runs at most once per
+ * STOCK_PRICE_REFRESH_INTERVAL_MS (default 12h, matching Polygon end-of-day
+ * data). Concurrent callers for the same classroom share a single in-flight
+ * Promise. Polygon calls are issued sequentially with a throttle
+ * (STOCK_PRICE_REFRESH_THROTTLE_MS, default 13s) so an N-symbol classroom
+ * cannot burst past the 5-calls/minute plan limit.
+ *
+ * Callers should NOT `await` this — kicking off the refresh from a read path
+ * must not block the response. The TTL is set only on successful completion,
+ * so a function instance that dies mid-refresh will simply re-attempt on the
+ * next read instead of returning silently-stale data forever.
+ *
+ * Failures are swallowed: a missing key, a Polygon outage, or a transient
+ * fetch error must not break the read path — readers fall back to the stored
+ * price.
+ */
+async function refreshClassroomMarketPricesIfStale(classroomCode: string) {
+  const interval = getPriceRefreshIntervalMs();
+  if (interval === 0) return;
+
+  const last = lastPriceRefreshAt.get(classroomCode) ?? 0;
+  if (Date.now() - last < interval) return;
+
+  // Dedupe gate. The `get` here and the `set` below must run synchronously
+  // before any `await` in this function — otherwise two concurrent callers
+  // could both clear this check and start parallel refreshes, doubling
+  // Polygon usage and breaching the 5/min rate limit. Keep them in the same
+  // sync block.
+  const inFlight = inFlightPriceRefresh.get(classroomCode);
+  if (inFlight) {
+    await inFlight;
+    return;
+  }
+
+  const throttleMs = getPriceRefreshThrottleMs();
+
+  const work = (async () => {
+    try {
+      const sql = getNeonSql();
+      const rows = (await sql`
+        SELECT symbol FROM market_prices WHERE classroom_code = ${classroomCode}
+      `) as Array<{ symbol: string }>;
+
+      for (let i = 0; i < rows.length; i++) {
+        // Throttle between (not before) calls so a one-symbol classroom
+        // refresh completes immediately.
+        if (i > 0 && throttleMs > 0) await sleep(throttleMs);
+
+        const quote = await fetchLatestClosePriceCents(rows[i].symbol);
+        if (!quote) continue;
+
+        await sql`
+          INSERT INTO market_prices (classroom_code, symbol, price, updated_at)
+          VALUES (${classroomCode}, ${rows[i].symbol}, ${quote.price}, NOW())
+          ON CONFLICT (classroom_code, symbol) DO UPDATE SET
+            price = EXCLUDED.price,
+            updated_at = NOW()
+        `;
+      }
+
+      lastPriceRefreshAt.set(classroomCode, Date.now());
+    } catch (error) {
+      console.warn('Market price refresh failed', { classroomCode, error });
+    } finally {
+      inFlightPriceRefresh.delete(classroomCode);
+    }
+  })();
+
+  inFlightPriceRefresh.set(classroomCode, work);
 }
 
 async function fetchNeonMarketPrices(
@@ -1965,6 +2082,7 @@ export async function getPortfolio(token: string) {
         throw new StockGameError('Student account was not found.', 404);
       }
       const classroom = await fetchNeonClassroom(student.classroomCode);
+      void refreshClassroomMarketPricesIfStale(student.classroomCode);
       const marketPrices = await fetchNeonMarketPrices(student.classroomCode);
       return buildPortfolioSnapshot(classroom, student, marketPrices);
     });
@@ -1996,6 +2114,8 @@ export async function getLeaderboard(
       if (!classroom) {
         throw new StockGameError('Classroom was not found.', 404);
       }
+
+      void refreshClassroomMarketPricesIfStale(classroomCode);
 
       // Single SQL aggregation: students × market_prices → totals.
       // Computes holdingsValue server-side, returning ranked entries.
@@ -2594,9 +2714,25 @@ export async function manageClassroomStudents(
   };
 }
 
+/**
+ * Test-only: await any in-flight market-price refresh. Production code never
+ * awaits the refresh (it is fired off `void`-style from the read path); tests
+ * use this to deterministically observe its side effects.
+ */
+export async function __waitForPendingPriceRefresh(classroomCode?: string) {
+  if (classroomCode) {
+    const work = inFlightPriceRefresh.get(classroomCode);
+    if (work) await work;
+    return;
+  }
+  await Promise.all(Array.from(inFlightPriceRefresh.values()));
+}
+
 export async function __resetStockGameState() {
   delete globalThis.__stockGameState;
   neonInitialized = false;
+  lastPriceRefreshAt.clear();
+  inFlightPriceRefresh.clear();
   getMemoryLeaderboardCache().clear();
   hasLoggedNeonFallback = false;
   __resetStudentAliasStore();
